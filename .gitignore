@@ -1,0 +1,21 @@
+# GateKeeper Mobile - Android build artifacts
+*.iml
+.gradle/
+build/
+local.properties
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Keystore
+*.jks
+*.keystore
+
+# Generated
+app/release/
+app/debug/
+
+# OS
+.DS_Store
+Thumbs.db
