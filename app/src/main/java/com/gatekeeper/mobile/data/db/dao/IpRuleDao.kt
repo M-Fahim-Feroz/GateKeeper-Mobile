@@ -5,6 +5,7 @@ import com.gatekeeper.mobile.data.db.entity.IpRule
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@JvmSuppressWildcards
 interface IpRuleDao {
 
     @Query("SELECT * FROM ip_rules WHERE isActive = 1 ORDER BY createdAt DESC")
@@ -20,17 +21,17 @@ interface IpRuleDao {
     fun observeCount(): Flow<Int>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(rule: IpRule)
+    suspend fun insert(rule: IpRule): Long
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAll(rules: List<IpRule>)
+    suspend fun insertAll(rules: List<IpRule>): List<Long>
 
     @Delete
-    suspend fun delete(rule: IpRule)
+    suspend fun delete(rule: IpRule): Int
 
     @Query("DELETE FROM ip_rules WHERE ip = :ip")
-    suspend fun deleteByIp(ip: String)
+    suspend fun deleteByIp(ip: String): Int
 
     @Query("DELETE FROM ip_rules")
-    suspend fun deleteAll()
+    suspend fun deleteAll(): Int
 }

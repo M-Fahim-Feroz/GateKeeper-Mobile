@@ -38,18 +38,17 @@ fun ThreatFeedScreen(
     // Group imported feeds by name
     val importedFeedNames = remember(allThreats) { allThreats.map { it.feedName }.toSet() }
 
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    // Show import status as snackbar
+    // Auto-clear status after 3 seconds for non-loading states
     LaunchedEffect(importStatus) {
         importStatus?.let {
-            snackbarHostState.showSnackbar(it, duration = SnackbarDuration.Short)
-            viewModel.clearStatus()
+            if (it.contains("Successfully") || it.contains("Failed") || it.contains("removed")) {
+                kotlinx.coroutines.delay(3000)
+                viewModel.clearStatus()
+            }
         }
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         containerColor = DarkBackground
     ) { paddingValues ->
         LazyColumn(
@@ -67,6 +66,13 @@ fun ThreatFeedScreen(
                         .background(Brush.verticalGradient(listOf(AccentRed.copy(alpha = 0.08f), DarkBackground)))
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
+                    // Back button for when navigated from Dashboard
+                    if (navController != null) {
+                        IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
+                            Icon(Icons.Filled.ArrowBack, "Back", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                        }
+                        Spacer(Modifier.height(4.dp))
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
@@ -130,6 +136,29 @@ fun ThreatFeedScreen(
                         }
                     }
                 }
+            } else if (importStatus != null) {
+                item {
+                    androidx.compose.animation.AnimatedContent(targetState = importStatus, label = "import_status") { status ->
+                        val isError = status?.contains("Failed") == true
+                        val isSuccess = status?.contains("Successfully") == true || status?.contains("removed") == true
+                        val color = when {
+                            isError -> AccentRed
+                            isSuccess -> AccentGreen
+                            else -> PrimaryCyan
+                        }
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 20.dp, vertical = 8.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(color.copy(alpha = 0.15f))
+                                .padding(12.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(status ?: "", color = color, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
             }
 
             // ── Custom URL import ──
@@ -190,7 +219,16 @@ fun ThreatFeedScreen(
             // ── Curated Feeds Section ──
             item {
                 Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    SectionHeader(title = "Curated Threat Feeds")
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        SectionHeader(title = "Curated Threat Feeds")
+                        TextButton(
+                            onClick = { viewModel.importAllRecommended() },
+                            enabled = !isLoading,
+                            contentPadding = PaddingValues(0.dp)
+                        ) {
+                            Text("Import All", color = PrimaryCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                        }
+                    }
                     Spacer(Modifier.height(2.dp))
                     Text(
                         "Tap any feed to import it. All feeds are free and updated regularly.",
@@ -212,13 +250,20 @@ fun ThreatFeedScreen(
             }
 
             // ── Imported Threats List ──
-            if (allThreats.isNotEmpty()) {
-                item {
-                    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                        SectionHeader(title = "Active Indicators")
-                    }
+            item {
+                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                    SectionHeader(title = "Active Indicators")
                 }
-
+            }
+            if (allThreats.isEmpty()) {
+                item {
+                    GKEmptyState(
+                        icon = Icons.Outlined.Security,
+                        title = "No Threats Imported",
+                        subtitle = "Import a curated feed above or add a custom URL to start blocking threats."
+                    )
+                }
+            } else {
                 val grouped = allThreats.groupBy { it.feedName }
                 grouped.forEach { (feedName, entries) ->
                     item {

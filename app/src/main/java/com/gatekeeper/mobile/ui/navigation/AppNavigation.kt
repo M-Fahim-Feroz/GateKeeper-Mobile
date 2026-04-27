@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -24,71 +25,109 @@ import com.gatekeeper.mobile.ui.screens.traffic.TrafficScreen
 import com.gatekeeper.mobile.ui.screens.threats.ThreatFeedScreen
 import com.gatekeeper.mobile.ui.screens.permissionauditor.PermissionAuditorScreen
 import com.gatekeeper.mobile.ui.screens.wifiscanner.WifiScannerScreen
+import com.gatekeeper.mobile.ui.screens.certaudit.CertAuditScreen
 import com.gatekeeper.mobile.ui.theme.*
+import com.gatekeeper.mobile.vpn.GateKeeperVpnService
+
+// Routes where the bottom nav bar should be visible
+private val BOTTOM_NAV_ROUTES = Screen.bottomNavItems.map { it.route }.toSet()
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(startDestination: String = Screen.Dashboard.route) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
+    // Only show bottom nav on primary tab screens
+    val showBottomBar = currentRoute in BOTTOM_NAV_ROUTES
+
+    // VPN status for badge
+    val isVpnActive by GateKeeperVpnService.isRunning.collectAsState()
+
     Scaffold(
         containerColor = DarkBackground,
         bottomBar = {
-            Column {
-                // Gradient separator line
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(
-                            Brush.horizontalGradient(
-                                listOf(
-                                    DarkSurface,
-                                    GlassBorder.copy(alpha = 0.3f),
-                                    DarkSurface
+            // ── Only show bottom nav on main 5 tabs ──────────────────────────
+            AnimatedVisibility(
+                visible = showBottomBar,
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(tween(200)),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(tween(150))
+            ) {
+                Column {
+                    // Gradient separator line
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(1.dp)
+                            .background(
+                                Brush.horizontalGradient(
+                                    listOf(
+                                        DarkSurface,
+                                        GlassBorder.copy(alpha = 0.3f),
+                                        DarkSurface
+                                    )
                                 )
                             )
-                        )
-                )
-                NavigationBar(
-                    containerColor = DarkSurface,
-                    tonalElevation = 0.dp
-                ) {
-                    Screen.bottomNavItems.forEach { screen ->
-                        val selected = currentRoute == screen.route
-                        NavigationBarItem(
-                            icon = {
-                                Icon(
-                                    imageVector = if (selected) screen.iconSelected else screen.icon,
-                                    contentDescription = screen.title,
-                                    modifier = Modifier.size(22.dp)
-                                )
-                            },
-                            label = {
-                                Text(
-                                    text = screen.title,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            },
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
+                    )
+                    NavigationBar(
+                        containerColor = DarkSurface,
+                        tonalElevation = 0.dp
+                    ) {
+                        Screen.bottomNavItems.forEach { screen ->
+                            val selected = currentRoute == screen.route
+                            NavigationBarItem(
+                                icon = {
+                                    // VPN status badge on Dashboard tab
+                                    if (screen == Screen.Dashboard) {
+                                        BadgedBox(
+                                            badge = {
+                                                if (isVpnActive) {
+                                                    Badge(
+                                                        containerColor = StatusOnline,
+                                                        modifier = Modifier.size(8.dp)
+                                                    )
+                                                }
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = if (selected) screen.iconSelected else screen.icon,
+                                                contentDescription = screen.title,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
+                                    } else {
+                                        Icon(
+                                            imageVector = if (selected) screen.iconSelected else screen.icon,
+                                            contentDescription = screen.title,
+                                            modifier = Modifier.size(22.dp)
+                                        )
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            colors = NavigationBarItemDefaults.colors(
-                                selectedIconColor = PrimaryCyan,
-                                selectedTextColor = PrimaryCyan,
-                                unselectedIconColor = TextTertiary,
-                                unselectedTextColor = TextTertiary,
-                                indicatorColor = PrimaryCyan.copy(alpha = 0.10f)
+                                },
+                                label = {
+                                    Text(
+                                        text = screen.title,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                },
+                                selected = selected,
+                                onClick = {
+                                    navController.navigate(screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                },
+                                colors = NavigationBarItemDefaults.colors(
+                                    selectedIconColor = PrimaryCyan,
+                                    selectedTextColor = PrimaryCyan,
+                                    unselectedIconColor = TextTertiary,
+                                    unselectedTextColor = TextTertiary,
+                                    indicatorColor = PrimaryCyan.copy(alpha = 0.10f)
+                                )
                             )
-                        )
+                        }
                     }
                 }
             }
@@ -96,7 +135,7 @@ fun AppNavigation() {
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Dashboard.route,
+            startDestination = startDestination,
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
@@ -114,6 +153,16 @@ fun AppNavigation() {
             composable(Screen.ThreatFeed.route) { ThreatFeedScreen(navController = navController) }
             composable(Screen.PermissionAuditor.route) { PermissionAuditorScreen(navController = navController) }
             composable(Screen.WifiScanner.route) { WifiScannerScreen(navController = navController) }
+            composable(Screen.CertAudit.route) { CertAuditScreen(navController = navController) }
+            composable("onboarding") {
+                com.gatekeeper.mobile.ui.screens.onboarding.OnboardingScreen(
+                    onComplete = {
+                        navController.navigate(Screen.Dashboard.route) {
+                            popUpTo("onboarding") { inclusive = true }
+                        }
+                    }
+                )
+            }
         }
     }
 }

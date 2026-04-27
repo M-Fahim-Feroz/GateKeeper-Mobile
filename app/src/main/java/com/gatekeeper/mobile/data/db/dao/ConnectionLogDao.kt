@@ -5,10 +5,14 @@ import com.gatekeeper.mobile.data.db.entity.ConnectionLog
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@JvmSuppressWildcards
 interface ConnectionLogDao {
 
     @Query("SELECT * FROM connection_logs ORDER BY timestamp DESC LIMIT :limit")
     fun observeRecent(limit: Int = 200): Flow<List<ConnectionLog>>
+
+    @Query("SELECT * FROM connection_logs WHERE timestamp >= :from ORDER BY timestamp DESC LIMIT 200")
+    fun observeSince(from: Long): Flow<List<ConnectionLog>>
 
     @Query("SELECT * FROM connection_logs WHERE packageName = :packageName ORDER BY timestamp DESC LIMIT :limit")
     fun observeByApp(packageName: String, limit: Int = 100): Flow<List<ConnectionLog>>
@@ -36,16 +40,16 @@ interface ConnectionLogDao {
     fun observeTotalBytesOut(): Flow<Long?>
 
     @Insert
-    suspend fun insert(log: ConnectionLog)
+    suspend fun insert(log: ConnectionLog): Long
 
     @Insert
-    suspend fun insertAll(logs: List<ConnectionLog>)
+    suspend fun insertAll(logs: List<ConnectionLog>): List<Long>
 
     @Query("DELETE FROM connection_logs WHERE timestamp < :before")
-    suspend fun deleteBefore(before: Long)
+    suspend fun deleteBefore(before: Long): Int
 
     @Query("DELETE FROM connection_logs")
-    suspend fun deleteAll()
+    suspend fun deleteAll(): Int
 
     @Query("SELECT * FROM connection_logs ORDER BY timestamp DESC")
     suspend fun getAllLogsSynchronous(): List<ConnectionLog>

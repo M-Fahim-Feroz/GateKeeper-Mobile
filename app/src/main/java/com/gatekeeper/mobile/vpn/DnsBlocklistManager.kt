@@ -2,6 +2,7 @@ package com.gatekeeper.mobile.vpn
 
 import android.util.Log
 import com.gatekeeper.mobile.data.repository.DnsRepository
+import com.gatekeeper.mobile.data.repository.SecurityAlertRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -12,6 +13,7 @@ import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.ln
 
 /**
  * Manages DNS blocklists — loads domains from Room DB and
@@ -23,12 +25,21 @@ import javax.inject.Singleton
 @Singleton
 class DnsBlocklistManager @Inject constructor(
     private val dnsRepository: DnsRepository,
-    private val threatFeedRepository: com.gatekeeper.mobile.data.repository.ThreatFeedRepository
+    private val threatFeedRepository: com.gatekeeper.mobile.data.repository.ThreatFeedRepository,
+    private val securityAlertRepository: SecurityAlertRepository
 ) {
     // ConcurrentHashMap used as a Set for thread-safe reads from the packet loop
     private val blacklistedDomains = ConcurrentHashMap.newKeySet<String>()
     private val whitelistedDomains = ConcurrentHashMap.newKeySet<String>()
     private val scope = CoroutineScope(Dispatchers.IO)
+
+    // F14: DNS resolution cache — tracks recently resolved IPs to detect hardcoded-IP bypass
+    val recentDnsResolutions = ConcurrentHashMap<String, Long>() // IP -> timestamp
+
+    // F13: Per-domain query rate counter for DNS exfiltration detection
+    private val dnsQueryRateCounter = ConcurrentHashMap<String, Int>() // baseDomain -> count/minute
+    private val dnsQueryRateResetTime = java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis())
+    private val exfiltAlertedDomains = ConcurrentHashMap.newKeySet<String>()
 
     companion object {
         private const val TAG = "DnsBlocklistManager"
@@ -155,5 +166,77 @@ class DnsBlocklistManager @Inject constructor(
 
         // Check blacklist
         return blacklistedDomains.any { blocked -> lower == blocked || lower.endsWith(".$blocked") }
+    }
+
+    /**
+     * F13: DNS Exfiltration Detection — call this for every resolved domain.
+     * Checks for long subdomains (base64/hex data) and high entropy.
+     * Non-blocking: runs security check in background coroutine.
+     */
+    fun checkDnsExfiltration(domain: String, packageName: String, appName: String) {
+        if (domain.count { it == '.' } < 2) return // Skip simple domains
+        
+        val subdomain = domain.substringBefore(".")
+        val baseDomain = domain.substringAfter(".")
+        
+        // Skip if already alerted for this base domain
+        if (exfiltAlertedDomains.contains(baseDomain)) return
+        
+        val reasons = mutableListOf<String>()
+        
+        // Check 1: Abnormally long subdomain (> 40 chars = likely encoded data)
+        if (subdomain.length > 40) {
+            reasons.add("Suspicious long subdomain (${subdomain.length} chars) — may encode stolen data")
+        }
+        
+        // Check 2: High Shannon entropy (> 3.5 = likely base64 or hex encoded)
+        val entropy = shannonEntropy(subdomain)
+        if (entropy > 3.5 && subdomain.length > 10) {
+            reasons.add("High entropy DNS query (${String.format("%.2f", entropy)}) — random-looking subdomain")
+        }
+        
+        // Check 3: Rapid query rate to same base domain (> 20/minute = tunneling)
+        val now = System.currentTimeMillis()
+        if (now - dnsQueryRateResetTime.get() > 60_000) {
+            dnsQueryRateCounter.clear()
+            dnsQueryRateResetTime.set(now)
+        }
+        val count = dnsQueryRateCounter.merge(baseDomain, 1, Int::plus) ?: 1
+        if (count > 20) {
+            reasons.add("Rapid DNS queries ($count/min) to $baseDomain — possible DNS tunnel")
+        }
+        
+        if (reasons.isNotEmpty()) {
+            exfiltAlertedDomains.add(baseDomain)
+            scope.launch {
+                securityAlertRepository.addAlert(
+                    type = "DNS_EXFILTRATION",
+                    severity = "HIGH",
+                    title = "Suspicious DNS Query from $appName",
+                    description = reasons.joinToString(". ") + ". Domain: $domain",
+                    packageName = packageName
+                )
+            }
+            Log.w(TAG, "DNS exfiltration detected from $packageName: $domain — ${reasons.joinToString(";")}")            
+        }
+    }
+
+    /**
+     * F14: Register a successfully resolved domain's IPs in the DNS cache.
+     * This is used by the VPN service to detect hardcoded-IP bypass attempts.
+     */
+    fun registerResolvedIps(ips: List<String>) {
+        val now = System.currentTimeMillis()
+        ips.forEach { ip -> recentDnsResolutions[ip] = now }
+        // Clean old entries (older than 10 minutes)
+        val cutoff = now - 10 * 60 * 1000L
+        recentDnsResolutions.entries.removeIf { it.value < cutoff }
+    }
+
+    private fun shannonEntropy(s: String): Double {
+        if (s.isEmpty()) return 0.0
+        return -s.groupBy { it }.values
+            .map { it.size.toDouble() / s.length }
+            .sumOf { p -> if (p > 0) p * ln(p) / ln(2.0) else 0.0 }
     }
 }

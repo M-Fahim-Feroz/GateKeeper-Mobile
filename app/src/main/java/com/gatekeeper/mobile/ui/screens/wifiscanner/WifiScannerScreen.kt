@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavController
 import com.gatekeeper.mobile.domain.model.WifiNetworkInfo
+import com.gatekeeper.mobile.data.db.entity.KnownNetwork
 import com.gatekeeper.mobile.ui.components.*
 import com.gatekeeper.mobile.ui.theme.*
 
@@ -34,6 +35,7 @@ fun WifiScannerScreen(
 ) {
     val results by viewModel.scannedNetworks.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
+    val knownNetworks by viewModel.knownNetworks.collectAsState(initial = emptyList())
     val context = LocalContext.current
     var showPermissionDeniedDialog by remember { mutableStateOf(false) }
 
@@ -126,8 +128,13 @@ fun WifiScannerScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 item { SectionHeader(title = "Discovered Networks") }
-                
                 items(results) { result -> DeviceItem(result) }
+                
+                if (knownNetworks.isNotEmpty()) {
+                    item { Spacer(Modifier.height(16.dp)) }
+                    item { SectionHeader(title = "Known Access Points") }
+                    items(knownNetworks) { net -> KnownNetworkItem(net) { viewModel.trustNetwork(net) } }
+                }
                 
                 item { Spacer(Modifier.height(80.dp)) }
             }
@@ -179,6 +186,44 @@ fun DeviceItem(result: WifiNetworkInfo) {
                 modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(scoreColor.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(result.securityType, style = MaterialTheme.typography.labelSmall, color = scoreColor, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun KnownNetworkItem(network: KnownNetwork, onTrust: () -> Unit) {
+    val isTrusted = network.isTrusted
+    val scoreColor = if (isTrusted) AccentGreen else AccentRed
+    
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(DarkCard)
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(scoreColor.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(if (isTrusted) Icons.Filled.VerifiedUser else Icons.Filled.Warning, null, tint = scoreColor, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(network.ssid, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(network.bssid, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            }
+            
+            if (!isTrusted) {
+                TextButton(onClick = onTrust) {
+                    Text("Trust", color = PrimaryCyan, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(scoreColor.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                    Text("Trusted", style = MaterialTheme.typography.labelSmall, color = scoreColor, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

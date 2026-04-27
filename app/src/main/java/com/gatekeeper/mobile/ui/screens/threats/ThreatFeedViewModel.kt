@@ -95,16 +95,32 @@ class ThreatFeedViewModel @Inject constructor(
     fun importFeed(feed: FeedSource) {
         viewModelScope.launch {
             _isLoading.value = true
-            _importStatus.value = "Downloading \${feed.name}..."
+            _importStatus.value = "Downloading ${feed.name}..."
             
             val result = manager.importFromUrl(feed.url, feed.name, feed.type, feed.threatType)
             
             result.onSuccess { count ->
-                _importStatus.value = "Successfully imported \$count threats."
+                _importStatus.value = "Successfully imported $count threats."
             }.onFailure { e ->
-                _importStatus.value = "Failed to import feed: \${e.message}"
+                _importStatus.value = "Failed to import feed: ${e.message}"
             }
             
+            _isLoading.value = false
+        }
+    }
+
+    fun importAllRecommended() {
+        viewModelScope.launch {
+            _isLoading.value = true
+            _importStatus.value = "Importing all recommended feeds..."
+            
+            var successCount = 0
+            recommendedFeeds.forEach { feed ->
+                val result = manager.importFromUrl(feed.url, feed.name, feed.type, feed.threatType)
+                if (result.isSuccess) successCount++
+            }
+            
+            _importStatus.value = "Successfully imported $successCount feeds."
             _isLoading.value = false
         }
     }

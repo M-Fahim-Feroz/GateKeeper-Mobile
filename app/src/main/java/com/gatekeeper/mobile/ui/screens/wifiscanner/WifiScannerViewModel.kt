@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.gatekeeper.mobile.domain.model.WifiNetworkInfo
 import com.gatekeeper.mobile.domain.usecase.ScanWifiNetworksUseCase
+import com.gatekeeper.mobile.data.repository.KnownNetworkRepository
+import com.gatekeeper.mobile.data.db.entity.KnownNetwork
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,8 +16,11 @@ import javax.inject.Inject
 
 @HiltViewModel
 class WifiScannerViewModel @Inject constructor(
-    private val scanWifiNetworksUseCase: ScanWifiNetworksUseCase
+    private val scanWifiNetworksUseCase: ScanWifiNetworksUseCase,
+    private val knownNetworkRepository: KnownNetworkRepository
 ) : ViewModel() {
+
+    val knownNetworks = knownNetworkRepository.observeAll()
 
     private val _scannedNetworks = MutableStateFlow<List<WifiNetworkInfo>>(emptyList())
     val scannedNetworks: StateFlow<List<WifiNetworkInfo>> = _scannedNetworks.asStateFlow()
@@ -24,7 +29,8 @@ class WifiScannerViewModel @Inject constructor(
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
     init {
-        scanWifi()
+        // Do NOT auto-scan here — let the user trigger it explicitly
+        // so the Location permission request is tied to a clear user action
     }
 
     fun scanWifi() {
@@ -35,6 +41,12 @@ class WifiScannerViewModel @Inject constructor(
             val results = scanWifiNetworksUseCase()
             _scannedNetworks.value = results
             _isScanning.value = false
+        }
+    }
+
+    fun trustNetwork(network: KnownNetwork) {
+        viewModelScope.launch {
+            knownNetworkRepository.trustNetwork(network)
         }
     }
 }

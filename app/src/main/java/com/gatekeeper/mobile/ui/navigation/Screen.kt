@@ -70,6 +70,12 @@ sealed class Screen(
         icon = Icons.Outlined.WifiTethering,
         iconSelected = Icons.Filled.WifiTethering
     )
+    data object CertAudit : Screen(
+        route = "cert_audit",
+        title = "Cert Auditor",
+        icon = Icons.Outlined.Security,
+        iconSelected = Icons.Filled.Security
+    )
 
     companion object {
         val bottomNavItems = listOf(Dashboard, Firewall, DnsFilter, Traffic, AiChat)

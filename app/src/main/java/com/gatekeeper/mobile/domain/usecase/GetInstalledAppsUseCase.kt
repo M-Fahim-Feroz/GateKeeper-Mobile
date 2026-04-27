@@ -22,7 +22,19 @@ class GetInstalledAppsUseCase @Inject constructor(
 
         return apps
             .filter { app ->
-                includeSystem || (app.flags and ApplicationInfo.FLAG_SYSTEM) == 0
+                val isSystemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                val isUpdatedSystemApp = (app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+                val hasLauncher = pm.getLaunchIntentForPackage(app.packageName) != null
+                
+                includeSystem || !isSystemApp || isUpdatedSystemApp || hasLauncher
+            }
+            .filter { app ->
+                try {
+                    pm.checkPermission(
+                        android.Manifest.permission.INTERNET,
+                        app.packageName
+                    ) == PackageManager.PERMISSION_GRANTED
+                } catch (e: Exception) { false }
             }
             .map { app ->
                 InstalledApp(

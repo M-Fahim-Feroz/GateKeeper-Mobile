@@ -1,6 +1,7 @@
 package com.gatekeeper.mobile.domain.usecase
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import com.gatekeeper.mobile.domain.model.AppPermissionInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -38,7 +39,15 @@ class ScanAppPermissionsUseCase @Inject constructor(
         val pm = context.packageManager
         val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
 
-        return apps.mapNotNull { appInfo ->
+        return apps
+            .filter { app ->
+                val isSystemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                val isUpdatedSystemApp = (app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+                val hasLauncher = pm.getLaunchIntentForPackage(app.packageName) != null
+                
+                !isSystemApp || isUpdatedSystemApp || hasLauncher
+            }
+            .mapNotNull { appInfo ->
             try {
                 val packageInfo = pm.getPackageInfo(
                     appInfo.packageName,

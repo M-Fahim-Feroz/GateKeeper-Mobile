@@ -48,3 +48,7 @@ val GradientOrange  = listOf(AccentOrange, AccentYellow)
 val GradientTeal    = listOf(AccentTeal, PrimaryCyan)
 val GradientCard    = listOf(DarkCard, DarkCardElevated)
 
+val BorderDefault   = GlassBorder
+val DarkBg          = DarkBackground
+val SurfaceDefault  = DarkSurface
+

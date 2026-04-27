@@ -25,7 +25,9 @@ import javax.inject.Singleton
  */
 @Singleton
 class TrafficLogger @Inject constructor(
-    private val trafficRepository: TrafficRepository
+    private val trafficRepository: TrafficRepository,
+    private val geoIpResolver: GeoIpResolver,
+    private val exfiltrationDetector: ExfiltrationDetector
 ) {
     companion object {
         private const val TAG = "TrafficLogger"
@@ -103,6 +105,23 @@ class TrafficLogger @Inject constructor(
         if (now - last < DEDUP_WINDOW_MS) return  // Duplicate — skip silently
         dedupCache[dedupKey] = now
 
+        val (resolvedCountry, resolvedCode) = if (remoteIp.isNotBlank()) {
+            geoIpResolver.resolve(remoteIp)
+        } else {
+            Pair(country, countryCode)
+        }
+
+        // F15: Cross-correlate traffic with sensor logs for exfiltration detection
+        if (!wasBlocked && bytesOut > 0) {
+            exfiltrationDetector.analyzeTraffic(
+                packageName = packageName,
+                appName = appName,
+                remoteIp = remoteIp,
+                bytesOut = bytesOut,
+                countryCode = resolvedCode
+            )
+        }
+
         val entry = ConnectionLog(
             packageName = packageName,
             appName = appName,
@@ -112,8 +131,8 @@ class TrafficLogger @Inject constructor(
             remoteIp = remoteIp,
             remotePort = remotePort,
             remoteHostname = remoteHostname,
-            country = country,
-            countryCode = countryCode,
+            country = resolvedCountry,
+            countryCode = resolvedCode,
             bytesIn = bytesIn,
             bytesOut = bytesOut,
             wasBlocked = wasBlocked

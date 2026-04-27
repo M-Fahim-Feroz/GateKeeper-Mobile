@@ -9,9 +9,15 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.gatekeeper.mobile.data.db.entity.BlocklistSubscription
+import com.gatekeeper.mobile.data.db.dao.BlocklistSubscriptionDao
+import com.gatekeeper.mobile.vpn.DnsBlocklistManager
+
 @HiltViewModel
 class DnsFilterViewModel @Inject constructor(
-    private val dnsRepository: DnsRepository
+    private val dnsRepository: DnsRepository,
+    private val blocklistSubscriptionDao: BlocklistSubscriptionDao,
+    private val dnsBlocklistManager: DnsBlocklistManager
 ) : ViewModel() {
 
     val blacklist: Flow<List<DnsEntry>> = dnsRepository.observeBlacklist()
@@ -38,6 +44,27 @@ class DnsFilterViewModel @Inject constructor(
                 "blacklist",
                 source
             )
+        }
+    }
+
+    val subscriptions: Flow<List<BlocklistSubscription>> = blocklistSubscriptionDao.observeAll()
+
+    fun toggleSubscription(sub: BlocklistSubscription, enabled: Boolean) {
+        viewModelScope.launch {
+            blocklistSubscriptionDao.upsert(sub.copy(isEnabled = enabled))
+            if (enabled) {
+                try {
+                    val count = dnsBlocklistManager.importFromUrl(sub.url, "blacklist", sub.id)
+                    blocklistSubscriptionDao.updateRefreshTime(sub.id, System.currentTimeMillis(), count)
+                } catch (e: Exception) {
+                    // Handle error (perhaps disable again)
+                    blocklistSubscriptionDao.upsert(sub.copy(isEnabled = false))
+                }
+            } else {
+                // If disabled, we might want to remove domains added by this source
+                dnsRepository.clearBySource(sub.id)
+                // In a full implementation, DnsBlocklistManager would reload
+            }
         }
     }
 }

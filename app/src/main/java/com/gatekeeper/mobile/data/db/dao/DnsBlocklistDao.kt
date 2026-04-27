@@ -5,6 +5,7 @@ import com.gatekeeper.mobile.data.db.entity.DnsEntry
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@JvmSuppressWildcards
 interface DnsBlocklistDao {
 
     @Query("SELECT * FROM dns_entries WHERE listType = :listType AND isActive = 1 ORDER BY domain ASC")
@@ -20,22 +21,22 @@ interface DnsBlocklistDao {
     fun observeCount(listType: String): Flow<Int>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(entry: DnsEntry)
+    suspend fun insert(entry: DnsEntry): Long
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAll(entries: List<DnsEntry>)
+    suspend fun insertAll(entries: List<DnsEntry>): List<Long>
 
     @Delete
-    suspend fun delete(entry: DnsEntry)
+    suspend fun delete(entry: DnsEntry): Int
 
     @Query("DELETE FROM dns_entries WHERE domain = :domain AND listType = :listType")
-    suspend fun deleteByDomain(domain: String, listType: String)
+    suspend fun deleteByDomain(domain: String, listType: String): Int
 
     @Query("DELETE FROM dns_entries WHERE source = :source")
-    suspend fun deleteBySource(source: String)
+    suspend fun deleteBySource(source: String): Int
 
     @Query("DELETE FROM dns_entries")
-    suspend fun deleteAll()
+    suspend fun deleteAll(): Int
 
     @Query("SELECT * FROM dns_entries")
     suspend fun getAllRules(): List<DnsEntry>

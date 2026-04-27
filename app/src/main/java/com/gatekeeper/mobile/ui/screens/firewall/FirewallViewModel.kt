@@ -24,8 +24,18 @@ class FirewallViewModel @Inject constructor(
 
     val blockedCount: Flow<Int> = firewallRepository.observeBlockedCount()
 
+    // F8: Live set of packages that block when screen off
+    private val _screenOffBlockedPkgs = MutableStateFlow<Set<String>>(emptySet())
+    val screenOffBlockedPkgs: StateFlow<Set<String>> = _screenOffBlockedPkgs.asStateFlow()
+
     init {
         loadApps()
+        // Observe firewall rules for screen-off state
+        viewModelScope.launch {
+            firewallRepository.observeAll().collect { rules ->
+                _screenOffBlockedPkgs.value = rules.filter { it.blockWhenScreenOff }.map { it.packageName }.toSet()
+            }
+        }
     }
 
     private fun loadApps() {
@@ -47,6 +57,18 @@ class FirewallViewModel @Inject constructor(
             _apps.value = _apps.value.map { app ->
                 if (app.packageName == packageName) app.copy(isBlocked = blocked) else app
             }
+        }
+    }
+
+    // F8: Toggle screen-off blocking per app
+    fun toggleScreenOffBlock(packageName: String, appName: String, block: Boolean) {
+        viewModelScope.launch {
+            val existing = firewallRepository.getRule(packageName)
+            val rule = existing ?: com.gatekeeper.mobile.data.db.entity.FirewallRule(
+                packageName = packageName,
+                appName = appName
+            )
+            firewallRepository.upsertRule(rule.copy(blockWhenScreenOff = block, updatedAt = System.currentTimeMillis()))
         }
     }
 }

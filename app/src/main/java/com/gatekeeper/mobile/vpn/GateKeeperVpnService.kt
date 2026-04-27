@@ -2,11 +2,15 @@ package com.gatekeeper.mobile.vpn
 
 import android.app.Notification
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.VpnService
 import android.os.ParcelFileDescriptor
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import com.gatekeeper.mobile.GateKeeperApp
 import com.gatekeeper.mobile.R
 import com.gatekeeper.mobile.data.repository.FirewallRepository
@@ -54,6 +58,24 @@ class GateKeeperVpnService : VpnService() {
     @Inject
     lateinit var threatFeedRepository: com.gatekeeper.mobile.data.repository.ThreatFeedRepository
 
+    @Inject
+    lateinit var rogueApDetector: RogueApDetector
+
+    @Inject
+    lateinit var privacyAccessLogger: PrivacyAccessLogger
+
+    @Inject
+    lateinit var settingsRepository: com.gatekeeper.mobile.data.repository.SettingsRepository
+
+    @Inject
+    lateinit var cellularMonitor: CellularMonitor
+
+    @Inject
+    lateinit var firewallRuleDao: com.gatekeeper.mobile.data.db.dao.FirewallRuleDao
+
+    @Inject
+    lateinit var securityAlertRepository: com.gatekeeper.mobile.data.repository.SecurityAlertRepository
+
     private var vpnInterface: ParcelFileDescriptor? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var packetLoopJob: Job? = null
@@ -62,6 +84,26 @@ class GateKeeperVpnService : VpnService() {
     // Packet processing components
     private var packetFilter: PacketFilter? = null
     private var dnsResolver: DnsResolver? = null
+
+    // F18: PCAP Recording State
+    private var isPcapRecording = false
+    private var currentPcapFile: java.io.File? = null
+
+    // Screen State Receiver
+    private val screenStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                Intent.ACTION_SCREEN_OFF -> {
+                    Log.i(TAG, "Screen OFF -> Activating background exfiltration blocker")
+                    packetFilter?.isScreenOff = true
+                }
+                Intent.ACTION_SCREEN_ON -> {
+                    Log.i(TAG, "Screen ON -> Resuming normal network access")
+                    packetFilter?.isScreenOff = false
+                }
+            }
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -95,6 +137,12 @@ class GateKeeperVpnService : VpnService() {
         packetFilter = PacketFilter()
         dnsResolver = DnsResolver(this, dnsBlocklistManager)
 
+        // Start Sensor Logging
+        privacyAccessLogger.start()
+
+        // Start Cellular Monitor (IMSI catcher detection)
+        cellularMonitor.start()
+
         // Start foreground notification
         startForeground(NOTIFICATION_ID, createNotification())
 
@@ -115,12 +163,70 @@ class GateKeeperVpnService : VpnService() {
             }
         }
 
+        // F8: Observe screen-off block rules (per-app, user selected)
+        serviceScope.launch {
+            firewallRuleDao.observeAll().collect { rules ->
+                val screenOffPackages = rules.filter { it.blockWhenScreenOff }.map { it.packageName }
+                val screenOffUids = screenOffPackages.mapNotNull { pkg ->
+                    try { packageManager.getPackageUid(pkg, 0) } catch (e: Exception) { null }
+                }.toSet()
+                packetFilter?.updateScreenOffBlockedUids(screenOffUids)
+                Log.d(TAG, "Screen-off block list updated: ${screenOffPackages.size} apps")
+            }
+        }
+
         // *** CRITICAL FIX: Observe DNS blacklist changes LIVE ***
         // When a user adds/removes a domain in the DNS screen while VPN is running,
         // this collector immediately pushes the update into DnsBlocklistManager's
         // in-memory set — no VPN restart needed.
         serviceScope.launch {
             dnsBlocklistManager.observeAndSync()
+        }
+
+        // Monitor Wi-Fi connections for Evil Twin attacks
+        val cm = getSystemService(android.net.ConnectivityManager::class.java)
+        cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onCapabilitiesChanged(network: android.net.Network, nc: android.net.NetworkCapabilities) {
+                if (nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) {
+                    val wifiInfo = nc.transportInfo as? android.net.wifi.WifiInfo
+                    if (wifiInfo != null && wifiInfo.bssid != null && wifiInfo.bssid != "02:00:00:00:00:00") {
+                        serviceScope.launch {
+                            val result = rogueApDetector.checkConnection(
+                                ssid = wifiInfo.ssid,
+                                bssid = wifiInfo.bssid,
+                                securityType = if (wifiInfo.currentSecurityType == android.net.wifi.WifiInfo.SECURITY_TYPE_OPEN) "OPEN" else "SECURED"
+                            )
+                            if (result == RogueApResult.EVIL_TWIN) {
+                                postBlockNotification("Wi-Fi Security", "Evil Twin Detected: ${wifiInfo.ssid}", "🛡️")
+                            }
+                        }
+                    }
+                }
+            }
+        })
+
+        // Register Screen State Receiver
+        val screenFilter = IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_SCREEN_ON)
+        }
+        registerReceiver(screenStateReceiver, screenFilter)
+
+        // F18: Observe PCAP capture state
+        serviceScope.launch {
+            settingsRepository.capturePcapFlow.collect { enabled ->
+                isPcapRecording = enabled
+                if (enabled && currentPcapFile == null) {
+                    val result = PcapWriter.createInitialFile(this@GateKeeperVpnService)
+                    if (result.isSuccess) {
+                        currentPcapFile = result.getOrNull()
+                        Log.i(TAG, "Started PCAP capture to ${currentPcapFile?.absolutePath}")
+                    }
+                } else if (!enabled) {
+                    currentPcapFile = null
+                    Log.i(TAG, "Stopped PCAP capture")
+                }
+            }
         }
         
         // Start periodic traffic reporting
@@ -157,10 +263,9 @@ class GateKeeperVpnService : VpnService() {
                     }
                 }
                 trafficLogger.flushLogs()
+                connectionTracker.sweepIdle()
                 
-                // Note: Idle connection cleanup is intentionally skipped here because
-                // in our simple blackhole design we don't know when TCP teardown occurs.
-                // Over time we could sweep connections idle for > 5 minutes.
+                // Idle connection cleanup is now active via sweepIdle()
             }
         }
     }
@@ -298,6 +403,13 @@ class GateKeeperVpnService : VpnService() {
                     packetCopy.put(buffer.array(), 0, length)
                     packetCopy.flip()
 
+                    // F18: Write raw packet to PCAP file if enabled
+                    if (isPcapRecording && currentPcapFile != null) {
+                        launch(Dispatchers.IO) {
+                            PcapWriter.appendPacket(currentPcapFile!!, packetCopy.array(), length)
+                        }
+                    }
+
                     launch(kotlinx.coroutines.Dispatchers.IO) {
                         val uid = connectionTracker.track(packetCopy, isOutbound = true)
                         val verdict = packetFilter?.filter(packetCopy, uid) ?: PacketVerdict.ALLOW
@@ -309,14 +421,33 @@ class GateKeeperVpnService : VpnService() {
                             PacketVerdict.DROP -> {
                                 _blockedCount.value++
                                 val conn = connectionTracker.getConnectionByBuffer(packetCopy)
+                                val appName = conn?.appName ?: "Unknown App"
+                                val targetIp = conn?.remoteIp ?: "unknown"
+                                postBlockNotification(appName, targetIp, "IP")
+
+                                // F14: Firewall Bypass Detection
+                                // If app is blocked AND reached this IP without using DNS → hardcoded IP bypass
                                 if (conn != null) {
+                                    val resolvedRecently = dnsBlocklistManager.recentDnsResolutions.containsKey(targetIp)
+                                    if (!resolvedRecently && targetIp != "unknown") {
+                                        serviceScope.launch {
+                                            securityAlertRepository.addAlert(
+                                                type = "FIREWALL_BYPASS",
+                                                severity = "HIGH",
+                                                title = "Firewall Bypass Attempt",
+                                                description = "$appName tried to connect to $targetIp using a hardcoded IP (bypassed DNS filter). Connection was blocked.",
+                                                packageName = conn.packageName
+                                            )
+                                        }
+                                        Log.w(TAG, "BYPASS DETECTED: $appName -> $targetIp (hardcoded IP, not DNS-resolved)")
+                                    }
                                     trafficLogger.log(
                                         packageName = conn.packageName ?: "unknown",
-                                        appName = conn.appName ?: "Unknown",
+                                        appName = appName,
                                         protocol = conn.protocol,
                                         localIp = conn.localIp,
                                         localPort = conn.localPort,
-                                        remoteIp = conn.remoteIp,
+                                        remoteIp = targetIp,
                                         remotePort = conn.remotePort,
                                         wasBlocked = true
                                     )
@@ -326,10 +457,12 @@ class GateKeeperVpnService : VpnService() {
                                 _blockedCount.value++
                                 val domain = dnsResolver?.sinkholePacket(packetCopy, outputStream)
                                 val conn = connectionTracker.getConnectionByBuffer(packetCopy)
+                                val appName = conn?.appName ?: "Unknown App"
+                                if (domain != null) postBlockNotification(appName, domain, "DNS")
                                 if (conn != null) {
                                     trafficLogger.log(
                                         packageName = conn.packageName ?: "unknown",
-                                        appName = conn.appName ?: "Unknown",
+                                        appName = appName,
                                         protocol = "DNS",
                                         localIp = conn.localIp,
                                         localPort = conn.localPort,
@@ -343,7 +476,13 @@ class GateKeeperVpnService : VpnService() {
                             PacketVerdict.DNS_INTERCEPT -> {
                                 val domain = dnsResolver?.resolveAndRespond(packetCopy, outputStream)
                                 val conn = connectionTracker.getConnectionByBuffer(packetCopy)
-                                if (conn != null) {
+                                if (domain != null && conn != null) {
+                                    // F13: Check for DNS exfiltration patterns
+                                    dnsBlocklistManager.checkDnsExfiltration(
+                                        domain = domain,
+                                        packageName = conn.packageName ?: "unknown",
+                                        appName = conn.appName ?: "Unknown"
+                                    )
                                     trafficLogger.log(
                                         packageName = conn.packageName ?: "unknown",
                                         appName = conn.appName ?: "Unknown",
@@ -352,12 +491,31 @@ class GateKeeperVpnService : VpnService() {
                                         localPort = conn.localPort,
                                         remoteIp = conn.remoteIp,
                                         remotePort = 53,
-                                        remoteHostname = domain, // Show domain name in Traffic Monitor
+                                        remoteHostname = domain,
                                         wasBlocked = false
                                     )
                                 }
                             }
-                        }
+                            PacketVerdict.DNS_LEAK -> {
+                                _blockedCount.value++
+                                val conn = connectionTracker.getConnectionByBuffer(packetCopy)
+                                val appName = conn?.appName ?: "Unknown App"
+                                // Raise a security alert for DNS leak detection
+                                if (conn != null) {
+                                    serviceScope.launch {
+                                        securityAlertRepository.addAlert(
+                                            type = "DNS_LEAK",
+                                            severity = "MEDIUM",
+                                            title = "DNS Leak Detected",
+                                            description = "$appName is using encrypted DNS-over-HTTPS which bypasses GateKeeper's DNS filter. Its domain queries are not being filtered.",
+                                            packageName = conn.packageName
+                                        )
+                                    }
+                                }
+                                postBlockNotification(appName, "DNS-over-HTTPS bypass", "🛡️")
+                                Log.w(TAG, "DNS leak blocked for $appName")
+                            }
+                        } // end when
                     } // end launch
                 }
 
@@ -385,6 +543,12 @@ class GateKeeperVpnService : VpnService() {
         packetFilter = null
         dnsResolver = null
 
+        try {
+            unregisterReceiver(screenStateReceiver)
+        } catch (e: Exception) {
+            // Ignored if not registered
+        }
+
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
@@ -404,6 +568,32 @@ class GateKeeperVpnService : VpnService() {
             .setOngoing(true)
             .setSilent(true)
             .build()
+    }
+
+    private fun postBlockNotification(appName: String, blockedTarget: String, type: String) {
+        val key = "$appName|$blockedTarget"
+        val now = System.currentTimeMillis()
+        if ((now - (notifDedup[key] ?: 0L)) < NOTIF_DEDUP_MS) return
+        notifDedup[key] = now
+
+        val emoji = if (type == "DNS") "🌐" else "🛡️"
+        val notification = NotificationCompat.Builder(this, GateKeeperApp.CHANNEL_ALERTS)
+            .setSmallIcon(android.R.drawable.ic_lock_lock)
+            .setContentTitle("$emoji GateKeeper blocked a threat")
+            .setContentText("$appName → $blockedTarget")
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this, 0,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            )
+            .build()
+
+        NotificationManagerCompat.from(this)
+            .notify(blockedTarget.hashCode(), notification)
     }
 
     override fun onDestroy() {
@@ -430,5 +620,8 @@ class GateKeeperVpnService : VpnService() {
 
         private val _blockedCount = MutableStateFlow(0L)
         val blockedCount: StateFlow<Long> = _blockedCount.asStateFlow()
+
+        private val notifDedup = java.util.concurrent.ConcurrentHashMap<String, Long>()
+        private const val NOTIF_DEDUP_MS = 5 * 60 * 1000L
     }
 }

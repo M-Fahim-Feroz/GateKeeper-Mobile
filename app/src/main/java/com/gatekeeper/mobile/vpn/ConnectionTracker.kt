@@ -239,6 +239,19 @@ class ConnectionTracker @Inject constructor(
         }
     }
 
+    /**
+     * Remove connections that have had zero data transfer for [idleThresholdMs].
+     * Call from the reporting loop every 5 seconds.
+     */
+    fun sweepIdle(idleThresholdMs: Long = 5 * 60 * 1000L) {
+        val cutoff = System.currentTimeMillis() - idleThresholdMs
+        activeConnections.entries.removeIf { (_, conn) ->
+            conn.timestamp < cutoff && conn.bytesIn == 0L && conn.bytesOut == 0L
+        }
+        val activeUids = activeConnections.values.map { it.uid }.toSet()
+        uidAppCache.keys.removeIf { it !in activeUids }
+    }
+
     fun clear() {
         activeConnections.clear()
         uidAppCache.clear()

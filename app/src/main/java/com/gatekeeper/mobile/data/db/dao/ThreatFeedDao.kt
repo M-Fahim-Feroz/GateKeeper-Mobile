@@ -5,6 +5,7 @@ import com.gatekeeper.mobile.data.db.entity.ThreatFeedEntry
 import kotlinx.coroutines.flow.Flow
 
 @Dao
+@JvmSuppressWildcards
 interface ThreatFeedDao {
 
     @Query("SELECT * FROM threat_feeds WHERE isActive = 1 ORDER BY lastUpdated DESC")
@@ -26,11 +27,11 @@ interface ThreatFeedDao {
     fun observeFeedNames(): Flow<List<String>>
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAll(entries: List<ThreatFeedEntry>)
+    suspend fun insertAll(entries: List<ThreatFeedEntry>): List<Long>
 
     @Query("DELETE FROM threat_feeds WHERE feedSource = :source")
-    suspend fun deleteBySource(source: String)
+    suspend fun deleteBySource(source: String): Int
 
     @Query("DELETE FROM threat_feeds")
-    suspend fun deleteAll()
+    suspend fun deleteAll(): Int
 }

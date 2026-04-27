@@ -31,6 +31,7 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
     val isLoading by viewModel.isLoading.collectAsState()
     val excludedCount by viewModel.blockedCount.collectAsState(initial = 0)
     val isVpnActive by GateKeeperVpnService.isRunning.collectAsState()
+    val screenOffBlockedPkgs by viewModel.screenOffBlockedPkgs.collectAsState()
 
     var searchQuery by remember { mutableStateOf("") }
     var showExcludedOnly by remember { mutableStateOf(false) }
@@ -68,23 +69,7 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
 
             // VPN warning banner
             if (!isVpnActive) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(AccentOrange.copy(alpha = 0.12f))
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Filled.Warning, null, tint = AccentOrange, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "VPN is OFF — app blocking is not active",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AccentOrange,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
+                Box(Modifier.fillMaxWidth().height(3.dp).background(AccentOrange.copy(alpha = 0.7f)))
                 Spacer(Modifier.height(12.dp))
             }
 
@@ -151,7 +136,9 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                 items(displayed, key = { it.packageName }) { app ->
                     AppFirewallItem(
                         app = app,
-                        onToggle = { excluded -> viewModel.toggleBlock(app.packageName, app.appName, excluded) }
+                        isScreenOffBlocked = app.packageName in screenOffBlockedPkgs,
+                        onToggle = { excluded -> viewModel.toggleBlock(app.packageName, app.appName, excluded) },
+                        onScreenOffToggle = { block -> viewModel.toggleScreenOffBlock(app.packageName, app.appName, block) }
                     )
                 }
                 item { Spacer(Modifier.height(80.dp)) }
@@ -161,7 +148,12 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
 }
 
 @Composable
-fun AppFirewallItem(app: InstalledApp, onToggle: (Boolean) -> Unit) {
+fun AppFirewallItem(
+    app: InstalledApp,
+    isScreenOffBlocked: Boolean,
+    onToggle: (Boolean) -> Unit,
+    onScreenOffToggle: (Boolean) -> Unit
+) {
     val excluded = app.isBlocked
     val shape = RoundedCornerShape(14.dp)
     val borderBrush = if (excluded)
@@ -169,50 +161,85 @@ fun AppFirewallItem(app: InstalledApp, onToggle: (Boolean) -> Unit) {
     else
         Brush.horizontalGradient(listOf(GlassBorder, GlassBorder))
 
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
             .background(DarkCard)
-            .then(
-                Modifier.clickable { onToggle(!excluded) }
-            )
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
-        val context = androidx.compose.ui.platform.LocalContext.current
-        val appIcon = remember(app.packageName) {
-            try { context.packageManager.getApplicationIcon(app.packageName) } catch (e: Exception) { null }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val appIcon = remember(app.packageName) {
+                try { context.packageManager.getApplicationIcon(app.packageName) } catch (e: Exception) { null }
+            }
+
+            Box(
+                modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp))
+                    .background(if (excluded) AccentOrange.copy(alpha = 0.12f) else PrimaryCyan.copy(alpha = 0.08f)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (appIcon != null) {
+                    coil.compose.AsyncImage(model = appIcon, contentDescription = app.appName, modifier = Modifier.size(28.dp))
+                } else {
+                    Icon(Icons.Filled.Apps, null, tint = if (excluded) AccentOrange else PrimaryCyan, modifier = Modifier.size(22.dp))
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(app.appName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
+                Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = TextTertiary, maxLines = 1)
+            }
+
+            // Internet Block toggle
+            Switch(
+                checked = excluded,
+                onCheckedChange = { onToggle(it) },
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = AccentRed,
+                    checkedTrackColor = AccentRed.copy(alpha = 0.25f),
+                    uncheckedThumbColor = AccentGreen.copy(alpha = 0.8f),
+                    uncheckedTrackColor = AccentGreen.copy(alpha = 0.15f)
+                )
+            )
         }
 
-        Box(
-            modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp))
-                .background(if (excluded) AccentOrange.copy(alpha = 0.12f) else PrimaryCyan.copy(alpha = 0.08f)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (appIcon != null) {
-                coil.compose.AsyncImage(model = appIcon, contentDescription = app.appName, modifier = Modifier.size(28.dp))
-            } else {
-                Icon(Icons.Filled.Apps, null, tint = if (excluded) AccentOrange else PrimaryCyan, modifier = Modifier.size(22.dp))
+        // F8: Screen-off blocking sub-row
+        androidx.compose.animation.AnimatedVisibility(visible = excluded || isScreenOffBlocked) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 54.dp, top = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Filled.NightlightRound, null,
+                        tint = if (isScreenOffBlocked) AccentOrange else TextTertiary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        "Block when screen off",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isScreenOffBlocked) AccentOrange else TextTertiary
+                    )
+                }
+                Switch(
+                    checked = isScreenOffBlocked,
+                    onCheckedChange = { onScreenOffToggle(it) },
+                    modifier = Modifier.size(width = 40.dp, height = 24.dp),
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = AccentOrange,
+                        checkedTrackColor = AccentOrange.copy(alpha = 0.25f),
+                        uncheckedThumbColor = TextTertiary,
+                        uncheckedTrackColor = DarkSurface
+                    )
+                )
             }
         }
-
-        Spacer(Modifier.width(12.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(app.appName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
-            Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = TextTertiary, maxLines = 1)
-        }
-
-        Switch(
-            checked = excluded,
-            onCheckedChange = { onToggle(it) },
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = AccentRed,
-                checkedTrackColor = AccentRed.copy(alpha = 0.25f),
-                uncheckedThumbColor = AccentGreen.copy(alpha = 0.8f),
-                uncheckedTrackColor = AccentGreen.copy(alpha = 0.15f)
-            )
-        )
     }
 }

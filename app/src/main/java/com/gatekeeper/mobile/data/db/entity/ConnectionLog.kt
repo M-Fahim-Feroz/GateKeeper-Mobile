@@ -24,5 +24,7 @@ data class ConnectionLog(
     val bytesIn: Long = 0,
     val bytesOut: Long = 0,
     val wasBlocked: Boolean = false,
+    val isSystemEvent: Boolean = false,
+    val systemEventReason: String? = null,
     val timestamp: Long = System.currentTimeMillis()
 )

@@ -8,6 +8,11 @@ import com.gatekeeper.mobile.data.db.dao.DnsBlocklistDao
 import com.gatekeeper.mobile.data.db.dao.FirewallRuleDao
 import com.gatekeeper.mobile.data.db.dao.IpRuleDao
 import com.gatekeeper.mobile.data.db.dao.ThreatFeedDao
+import com.gatekeeper.mobile.data.db.dao.KnownNetworkDao
+import com.gatekeeper.mobile.data.db.dao.SensorLogDao
+import com.gatekeeper.mobile.data.db.dao.SecurityAlertDao
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.gatekeeper.mobile.data.remote.AiApiService
 import dagger.Module
 import dagger.Provides
@@ -28,6 +33,85 @@ object AppModule {
 
     // â”€â”€ Database â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS known_networks (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    ssid TEXT NOT NULL,
+                    bssid TEXT NOT NULL,
+                    securityType TEXT NOT NULL,
+                    firstSeenAt INTEGER NOT NULL,
+                    lastSeenAt INTEGER NOT NULL,
+                    isTrusted INTEGER NOT NULL
+                )
+            """)
+        }
+    }
+
+    val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS sensor_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    packageName TEXT NOT NULL,
+                    appName TEXT NOT NULL,
+                    sensorType TEXT NOT NULL,
+                    startedAt INTEGER NOT NULL,
+                    durationMs INTEGER NOT NULL,
+                    isBackground INTEGER NOT NULL
+                )
+            """)
+        }
+    }
+
+    val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS security_alerts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    type TEXT NOT NULL,
+                    severity TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL,
+                    packageName TEXT,
+                    timestamp INTEGER NOT NULL,
+                    isResolved INTEGER NOT NULL
+                )
+            """)
+        }
+    }
+
+    val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS blocklist_subscriptions (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    isEnabled INTEGER NOT NULL DEFAULT 1,
+                    lastRefreshedAt INTEGER NOT NULL DEFAULT 0,
+                    domainCount INTEGER NOT NULL DEFAULT 0
+                )
+            """)
+        }
+    }
+
+    // v7: Add blockWhenScreenOff column to firewall_rules (F8 per-app screen-off blocking)
+    val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE firewall_rules ADD COLUMN blockWhenScreenOff INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE connection_logs ADD COLUMN isSystemEvent INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE connection_logs ADD COLUMN systemEventReason TEXT")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -36,7 +120,7 @@ object AppModule {
             AppDatabase::class.java,
             "gatekeeper.db"
         )
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .build()
     }
 
@@ -45,6 +129,10 @@ object AppModule {
     @Provides fun provideConnectionLogDao(db: AppDatabase): ConnectionLogDao = db.connectionLogDao()
     @Provides fun provideIpRuleDao(db: AppDatabase): IpRuleDao = db.ipRuleDao()
     @Provides fun provideThreatFeedDao(db: AppDatabase): ThreatFeedDao = db.threatFeedDao()
+    @Provides fun provideKnownNetworkDao(db: AppDatabase): KnownNetworkDao = db.knownNetworkDao()
+    @Provides fun provideSensorLogDao(db: AppDatabase): SensorLogDao = db.sensorLogDao()
+    @Provides fun provideSecurityAlertDao(db: AppDatabase): SecurityAlertDao = db.securityAlertDao()
+    @Provides fun provideBlocklistSubscriptionDao(db: AppDatabase): com.gatekeeper.mobile.data.db.dao.BlocklistSubscriptionDao = db.blocklistSubscriptionDao()
 
     // â”€â”€ Network â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

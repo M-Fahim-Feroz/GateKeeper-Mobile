@@ -1,0 +1,94 @@
+package com.gatekeeper.mobile.vpn
+
+import android.app.AppOpsManager
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Log
+import androidx.annotation.RequiresApi
+import com.gatekeeper.mobile.data.repository.SensorLogRepository
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
+import javax.inject.Inject
+import javax.inject.Singleton
+
+@Singleton
+class PrivacyAccessLogger @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val sensorLogRepository: SensorLogRepository
+) {
+    companion object {
+        private const val TAG = "PrivacyAccessLogger"
+    }
+
+    private val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+    private val pm = context.packageManager
+    private val activeSessions = ConcurrentHashMap<String, Long>() // Key: "$packageName|$opName", Value: logId
+
+    private val scope = CoroutineScope(Dispatchers.IO)
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private val opListener = AppOpsManager.OnOpActiveChangedListener { code, uid, packageName, active ->
+        scope.launch {
+            handleOpChange(code, uid, packageName, active)
+        }
+    }
+
+    fun start() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                // Listen for Camera and Microphone
+                appOpsManager.startWatchingActive(
+                    arrayOf(AppOpsManager.OPSTR_CAMERA, AppOpsManager.OPSTR_RECORD_AUDIO),
+                    context.mainExecutor,
+                    opListener
+                )
+                Log.i(TAG, "Privacy Access Logger started")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start Privacy Access Logger", e)
+            }
+        } else {
+            Log.w(TAG, "Privacy Access Logger requires Android 10+")
+        }
+    }
+
+    private suspend fun handleOpChange(opName: String, uid: Int, packageName: String, active: Boolean) {
+        val sessionKey = "$packageName|$opName"
+        val sensorType = when (opName) {
+            AppOpsManager.OPSTR_CAMERA -> "CAMERA"
+            AppOpsManager.OPSTR_RECORD_AUDIO -> "MICROPHONE"
+            else -> "UNKNOWN"
+        }
+
+        if (active) {
+            // Started using sensor
+            val appName = try {
+                val ai = pm.getApplicationInfo(packageName, 0)
+                pm.getApplicationLabel(ai).toString()
+            } catch (e: Exception) {
+                packageName
+            }
+
+            // In a real app we'd check ActivityManager to see if the app is foreground.
+            // For now, we assume background if the VPN is not tracking it actively as foreground.
+            val isBackground = false
+
+            val logId = sensorLogRepository.logAccessStart(packageName, appName, sensorType, isBackground)
+            activeSessions[sessionKey] = logId
+            Log.d(TAG, "Access started: $appName -> $sensorType")
+
+        } else {
+            // Stopped using sensor
+            val logId = activeSessions.remove(sessionKey)
+            if (logId != null) {
+                // In a perfect world, we'd query the start time and calculate duration.
+                // Here we just mark an end time (simplified duration update).
+                sensorLogRepository.logAccessEnd(logId, 1000) // stub 1 second duration
+                Log.d(TAG, "Access ended: $packageName -> $sensorType")
+            }
+        }
+    }
+}

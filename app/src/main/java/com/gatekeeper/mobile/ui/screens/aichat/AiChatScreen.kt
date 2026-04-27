@@ -1,4 +1,4 @@
-﻿package com.gatekeeper.mobile.ui.screens.aichat
+package com.gatekeeper.mobile.ui.screens.aichat
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
@@ -68,6 +68,33 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
                 }
                 IconButton(onClick = { viewModel.clearChat() }) {
                     Icon(Icons.Filled.DeleteOutline, "Clear Chat", tint = TextTertiary)
+                }
+            }
+        }
+
+        // ── Offline Banner — shown when desktop backend is unreachable ────────
+        if (!isServerOnline) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(AccentOrange.copy(alpha = 0.10f))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Outlined.WifiOff, contentDescription = "Offline", tint = AccentOrange, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        "Desktop backend not connected",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = AccentOrange,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        "Go to Settings → Desktop Integration to set your PC's IP address.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
                 }
             }
         }

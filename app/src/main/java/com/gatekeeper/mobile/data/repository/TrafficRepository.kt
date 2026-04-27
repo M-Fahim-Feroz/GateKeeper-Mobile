@@ -12,6 +12,7 @@ class TrafficRepository @Inject constructor(
     private val dao: ConnectionLogDao
 ) {
     fun observeRecent(limit: Int = 200): Flow<List<ConnectionLog>> = dao.observeRecent(limit)
+    fun observeSince(from: Long): Flow<List<ConnectionLog>> = dao.observeSince(from)
     fun observeByApp(packageName: String): Flow<List<ConnectionLog>> = dao.observeByApp(packageName)
     fun observeBlocked(): Flow<List<ConnectionLog>> = dao.observeBlocked()
     fun observeTopCountries(): Flow<List<CountryCount>> = dao.observeTopCountries()
@@ -23,4 +24,20 @@ class TrafficRepository @Inject constructor(
     suspend fun logConnections(logs: List<ConnectionLog>) = dao.insertAll(logs)
     suspend fun clearOlderThan(timestamp: Long) = dao.deleteBefore(timestamp)
     suspend fun deleteAll() = dao.deleteAll()
+
+    suspend fun insertSystemEvent(reason: String) {
+        logConnection(
+            ConnectionLog(
+                packageName = "system",
+                appName = "System",
+                protocol = "SYS",
+                localIp = "",
+                localPort = 0,
+                remoteIp = "",
+                remotePort = 0,
+                isSystemEvent = true,
+                systemEventReason = reason
+            )
+        )
+    }
 }

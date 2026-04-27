@@ -28,4 +28,8 @@ class FirewallRepository @Inject constructor(
     }
 
     suspend fun deleteAll() = dao.deleteAll()
+
+    suspend fun getRule(packageName: String): FirewallRule? = dao.getByPackage(packageName)
+
+    suspend fun upsertRule(rule: FirewallRule) = dao.upsert(rule)
 }

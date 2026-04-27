@@ -25,7 +25,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
-    var isBlacklistMode by remember { mutableStateOf(true) }
+    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Blocklist, 1 = Allowlist, 2 = Subscriptions
     var newDomain by remember { mutableStateOf("") }
     var domainError by remember { mutableStateOf<String?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
@@ -36,8 +36,10 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
     val whitelistCount by viewModel.whitelistCount.collectAsState(initial = 0)
     val isVpnActive by GateKeeperVpnService.isRunning.collectAsState()
 
-    val currentList = if (isBlacklistMode) blacklist else whitelist
-    val currentListType = if (isBlacklistMode) "blacklist" else "whitelist"
+    val subscriptions by viewModel.subscriptions.collectAsState(initial = emptyList())
+
+    val currentList = if (selectedTab == 0) blacklist else whitelist
+    val currentListType = if (selectedTab == 0) "blacklist" else "whitelist"
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -90,36 +92,22 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                         Text("Block & allow domains at DNS level", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                     }
                     Spacer(Modifier.weight(1f))
-                    FloatingActionButton(
-                        onClick = { showAddDialog = true; newDomain = ""; domainError = null },
-                        modifier = Modifier.size(44.dp),
-                        containerColor = SecondaryPurple.copy(alpha = 0.2f),
-                        contentColor = SecondaryPurple
-                    ) {
-                        Icon(Icons.Filled.Add, "Add domain", modifier = Modifier.size(20.dp))
+                    if (selectedTab != 2) {
+                        FloatingActionButton(
+                            onClick = { showAddDialog = true; newDomain = ""; domainError = null },
+                            modifier = Modifier.size(44.dp),
+                            containerColor = SecondaryPurple.copy(alpha = 0.2f),
+                            contentColor = SecondaryPurple
+                        ) {
+                            Icon(Icons.Filled.Add, "Add domain", modifier = Modifier.size(20.dp))
+                        }
                     }
                 }
 
                 // VPN warning banner
                 if (!isVpnActive) {
                     Spacer(Modifier.height(14.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(AccentOrange.copy(alpha = 0.12f))
-                            .padding(horizontal = 12.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Filled.Warning, null, tint = AccentOrange, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "VPN is OFF — DNS blocking is not active",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = AccentOrange,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
+                    Box(Modifier.fillMaxWidth().height(3.dp).background(AccentOrange.copy(alpha = 0.7f)))
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -135,8 +123,8 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                 // Mode toggle chips
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
-                        selected = isBlacklistMode,
-                        onClick = { isBlacklistMode = true },
+                        selected = selectedTab == 0,
+                        onClick = { selectedTab = 0 },
                         label = { Text("Blocklist") },
                         leadingIcon = { Icon(Icons.Filled.Block, null, modifier = Modifier.size(16.dp)) },
                         colors = FilterChipDefaults.filterChipColors(
@@ -145,8 +133,8 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                         )
                     )
                     FilterChip(
-                        selected = !isBlacklistMode,
-                        onClick = { isBlacklistMode = false },
+                        selected = selectedTab == 1,
+                        onClick = { selectedTab = 1 },
                         label = { Text("Allowlist") },
                         leadingIcon = { Icon(Icons.Filled.CheckCircle, null, modifier = Modifier.size(16.dp)) },
                         colors = FilterChipDefaults.filterChipColors(
@@ -154,35 +142,73 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                             selectedLabelColor = AccentGreen
                         )
                     )
+                    FilterChip(
+                        selected = selectedTab == 2,
+                        onClick = { selectedTab = 2 },
+                        label = { Text("Subscriptions") },
+                        leadingIcon = { Icon(Icons.Filled.LibraryBooks, null, modifier = Modifier.size(16.dp)) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = PrimaryCyan.copy(alpha = 0.15f),
+                            selectedLabelColor = PrimaryCyan
+                        )
+                    )
                 }
             }
 
-            if (currentList.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(Icons.Filled.FilterListOff, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            if (isBlacklistMode) "No domains blocked yet" else "No domains allowed yet",
-                            color = TextSecondary, style = MaterialTheme.typography.bodyMedium
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text("Tap + to add one", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
-                    }
-                }
-            } else {
+            if (selectedTab == 2) {
+                // Subscriptions UI
                 LazyColumn(
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(currentList, key = { it.id }) { entry ->
-                        DnsEntryItem(
-                            entry = entry,
-                            isBlacklisted = isBlacklistMode,
-                            onDelete = { viewModel.removeDomain(entry.domain, currentListType) }
+                    val feeds = com.gatekeeper.mobile.data.model.BuiltInBlocklists.feeds
+                    items(feeds, key = { it.id }) { feed ->
+                        val sub = subscriptions.find { it.id == feed.id }
+                        SubscriptionItem(
+                            feed = feed,
+                            isEnabled = sub?.isEnabled == true,
+                            domainCount = sub?.domainCount ?: 0,
+                            onToggle = { enabled ->
+                                val entity = sub ?: com.gatekeeper.mobile.data.db.entity.BlocklistSubscription(
+                                    id = feed.id,
+                                    name = feed.name,
+                                    url = feed.url,
+                                    type = feed.type
+                                )
+                                viewModel.toggleSubscription(entity, enabled)
+                            }
                         )
                     }
                     item { Spacer(Modifier.height(80.dp)) }
+                }
+            } else {
+                if (currentList.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(Icons.Filled.FilterListOff, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                if (selectedTab == 0) "No domains blocked yet" else "No domains allowed yet",
+                                color = TextSecondary, style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text("Tap + to add one", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        items(currentList, key = { it.id }) { entry ->
+                            DnsEntryItem(
+                                entry = entry,
+                                isBlacklisted = selectedTab == 0,
+                                onDelete = { viewModel.removeDomain(entry.domain, currentListType) }
+                            )
+                        }
+                        item { Spacer(Modifier.height(80.dp)) }
+                    }
                 }
             }
         }
@@ -192,7 +218,7 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false; newDomain = ""; domainError = null },
             containerColor = DarkSurfaceVariant,
-            title = { Text(if (isBlacklistMode) "Block Domain" else "Allow Domain", color = TextPrimary) },
+            title = { Text(if (selectedTab == 0) "Block Domain" else "Allow Domain", color = TextPrimary) },
             text = {
                 Column {
                     Text(
@@ -231,7 +257,7 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                         showAddDialog = false
                         newDomain = ""
                         domainError = null
-                        val action = if (isBlacklistMode) "blocked" else "allowed"
+                        val action = if (selectedTab == 0) "blocked" else "allowed"
                         scope.launch {
                             snackbarHostState.showSnackbar(
                                 message = "✓  $cleaned  $action successfully",
@@ -284,5 +310,69 @@ fun DnsEntryItem(entry: DnsEntry, isBlacklisted: Boolean, onDelete: () -> Unit) 
         IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
             Icon(Icons.Filled.DeleteOutline, "Delete", tint = TextTertiary, modifier = Modifier.size(18.dp))
         }
+    }
+}
+
+@Composable
+fun SubscriptionItem(
+    feed: com.gatekeeper.mobile.data.model.BlocklistFeed,
+    isEnabled: Boolean,
+    domainCount: Int,
+    onToggle: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(DarkCard)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = feed.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.width(8.dp))
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(AccentOrange.copy(alpha = 0.2f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(feed.category.uppercase(), color = AccentOrange, style = MaterialTheme.typography.labelSmall)
+                }
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = feed.description,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Storage, null, tint = TextTertiary, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    if (isEnabled && domainCount > 0) "$domainCount domains active" else feed.estimatedSize,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isEnabled) AccentGreen else TextTertiary
+                )
+            }
+        }
+        Spacer(Modifier.width(16.dp))
+        Switch(
+            checked = isEnabled,
+            onCheckedChange = onToggle,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = androidx.compose.ui.graphics.Color.White,
+                checkedTrackColor = AccentGreen,
+                uncheckedThumbColor = TextSecondary,
+                uncheckedTrackColor = DarkSurfaceVariant
+            )
+        )
     }
 }

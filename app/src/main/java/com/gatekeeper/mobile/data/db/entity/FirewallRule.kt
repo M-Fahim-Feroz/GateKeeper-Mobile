@@ -13,6 +13,7 @@ data class FirewallRule(
     val packageName: String,
     val appName: String,
     val isBlocked: Boolean = false,
+    val blockWhenScreenOff: Boolean = false,  // F8: Block this app's network when screen turns off
     val blockWifi: Boolean = true,
     val blockMobileData: Boolean = true,
     val createdAt: Long = System.currentTimeMillis(),

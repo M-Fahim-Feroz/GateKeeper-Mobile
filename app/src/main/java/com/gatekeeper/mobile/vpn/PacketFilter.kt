@@ -10,7 +10,8 @@ enum class PacketVerdict {
     ALLOW,          // Forward packet normally
     DROP,           // Silently drop the packet
     DNS_INTERCEPT,  // DNS query — handle locally
-    DNS_SINKHOLE    // Blocked DNS query — Force a mock 0.0.0.0 response instantly to prevent OS bypass!
+    DNS_SINKHOLE,   // Blocked DNS query — Force a mock 0.0.0.0 response instantly to prevent OS bypass!
+    DNS_LEAK        // App using DNS-over-HTTPS to bypass our filter
 }
 
 /**
@@ -22,6 +23,21 @@ class PacketFilter {
     private val blockedUids = mutableSetOf<Int>()
     private val blockedIps = mutableSetOf<String>()
     private val blockedPorts = mutableSetOf<Int>()
+    // F8: Only these UIDs are blocked when screen turns off (user-selected, not all apps)
+    private val screenOffBlockedUids = mutableSetOf<Int>()
+
+    // F15: Known DNS-over-HTTPS providers — apps connecting to these bypass our DNS filter
+    private val dohProviderIps = setOf(
+        "8.8.8.8", "8.8.4.4",         // Google
+        "1.1.1.1", "1.0.0.1",         // Cloudflare
+        "9.9.9.9", "149.112.112.112", // Quad9
+        "208.67.222.222", "208.67.220.220" // OpenDNS
+    )
+
+    @Volatile
+    var isScreenOff: Boolean = false
+    @Volatile
+    var blockDnsLeak: Boolean = true  // Drop DoH bypass attempts
 
     /**
      * Inspect a raw IP packet and decide whether to allow, drop, or intercept.
@@ -58,6 +74,10 @@ class PacketFilter {
                 if (protocol == 6 && packet.remaining() >= 4) { // TCP
                     packet.short // Skip Src port
                     dstPort = packet.short.toInt() and 0xFFFF // Dst port
+                    // F15: Detect DNS-over-HTTPS leak (TCP 443 to known DoH providers)
+                    if (dstPort == 443 && dohProviderIps.contains(dstIp)) {
+                        return PacketVerdict.DNS_LEAK
+                    }
                 } else if (protocol == 17 && packet.remaining() >= 4) { // UDP
                     packet.short // Skip Src port
                     dstPort = packet.short.toInt() and 0xFFFF // Dst port
@@ -70,6 +90,11 @@ class PacketFilter {
                 
                 // If it's a blocked UID but not DNS, drop it natively
                 if (isBlockedUid) return PacketVerdict.DROP
+
+                // F8 FIXED: Screen-off blocking only for user-selected apps
+                if (isScreenOff && uid != null && screenOffBlockedUids.contains(uid)) {
+                    return PacketVerdict.DROP
+                }
                 
                 // Check firewall rules
                 if (blockedIps.contains(dstIp)) {
@@ -104,6 +129,11 @@ class PacketFilter {
                 }
                 
                 if (isBlockedUid) return PacketVerdict.DROP
+
+                // F8 FIXED: IPv6 screen-off check also uses per-app set
+                if (isScreenOff && uid != null && screenOffBlockedUids.contains(uid)) {
+                    return PacketVerdict.DROP
+                }
                 
                 if (blockedIps.contains(dstIp)) {
                     return PacketVerdict.DROP
@@ -135,5 +165,11 @@ class PacketFilter {
     fun updateBlockedPorts(ports: Set<Int>) {
         blockedPorts.clear()
         blockedPorts.addAll(ports)
+    }
+
+    // F8: Update per-app screen-off blocked UIDs
+    fun updateScreenOffBlockedUids(uids: Set<Int>) {
+        screenOffBlockedUids.clear()
+        screenOffBlockedUids.addAll(uids)
     }
 }
