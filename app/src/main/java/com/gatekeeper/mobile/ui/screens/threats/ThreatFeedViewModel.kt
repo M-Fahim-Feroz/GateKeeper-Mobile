@@ -111,16 +111,24 @@ class ThreatFeedViewModel @Inject constructor(
 
     fun importAllRecommended() {
         viewModelScope.launch {
+            if (_isLoading.value) return@launch
             _isLoading.value = true
-            _importStatus.value = "Importing all recommended feeds..."
             
             var successCount = 0
-            recommendedFeeds.forEach { feed ->
+            var failCount = 0
+            val total = recommendedFeeds.size
+            
+            recommendedFeeds.forEachIndexed { index, feed ->
+                _importStatus.value = "Importing ${index + 1}/$total… ${feed.name}"
                 val result = manager.importFromUrl(feed.url, feed.name, feed.type, feed.threatType)
-                if (result.isSuccess) successCount++
+                if (result.isSuccess) successCount++ else failCount++
             }
             
-            _importStatus.value = "Successfully imported $successCount feeds."
+            if (failCount == 0) {
+                _importStatus.value = "$total/$total imported ✓"
+            } else {
+                _importStatus.value = "$successCount/$total imported — $failCount failed"
+            }
             _isLoading.value = false
         }
     }
