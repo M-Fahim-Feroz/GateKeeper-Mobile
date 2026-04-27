@@ -22,7 +22,8 @@ data class RogueCertInfo(
 
 @Singleton
 class CertificateAuditor @Inject constructor(
-    private val securityAlertRepository: SecurityAlertRepository
+    private val securityAlertRepository: SecurityAlertRepository,
+    private val notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 ) {
     
     companion object {
@@ -68,6 +69,14 @@ class CertificateAuditor @Inject constructor(
                         title = "Suspicious Root Certificate",
                         description = "A user-installed certificate issued by '$issuerDn' could be used to decrypt your secure HTTPS traffic."
                     )
+                    
+                    if (riskLevel == "HIGH") {
+                        notificationManager.sendSecurityAlert(
+                            title = "🔐 Rogue Certificate Found",
+                            message = "A highly suspicious root certificate ($issuerDn) was detected.",
+                            route = "cert_audit"
+                        )
+                    }
                     
                     riskyCerts.add(
                         RogueCertInfo(

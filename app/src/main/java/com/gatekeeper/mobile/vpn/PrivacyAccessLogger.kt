@@ -18,7 +18,8 @@ import javax.inject.Singleton
 @Singleton
 class PrivacyAccessLogger @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val sensorLogRepository: SensorLogRepository
+    private val sensorLogRepository: SensorLogRepository,
+    private val notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 ) {
     companion object {
         private const val TAG = "PrivacyAccessLogger"
@@ -72,13 +73,21 @@ class PrivacyAccessLogger @Inject constructor(
                 packageName
             }
 
-            // In a real app we'd check ActivityManager to see if the app is foreground.
-            // For now, we assume background if the VPN is not tracking it actively as foreground.
-            val isBackground = false
+            val am = context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val processInfo = am.runningAppProcesses?.find { it.processName == packageName }
+            val isBackground = processInfo?.importance != android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
 
             val logId = sensorLogRepository.logAccessStart(packageName, appName, sensorType, isBackground)
             activeSessions[sessionKey] = logId
             Log.d(TAG, "Access started: $appName -> $sensorType")
+
+            if (isBackground) {
+                notificationManager.sendTrafficAlert(
+                    title = "📷 Background Sensor Access",
+                    message = "$appName is using your $sensorType in the background.",
+                    route = "permission_auditor"
+                )
+            }
 
         } else {
             // Stopped using sensor

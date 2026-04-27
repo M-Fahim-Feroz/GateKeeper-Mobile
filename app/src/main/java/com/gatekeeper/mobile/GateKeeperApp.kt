@@ -35,11 +35,22 @@ class GateKeeperApp : Application() {
             description = "Notifications for security threats and blocked connections"
         }
 
-        manager.createNotificationChannels(listOf(vpnChannel, alertChannel))
+        // High priority security threats
+        val securityChannel = NotificationChannel(
+            CHANNEL_SECURITY,
+            "Critical Security Threats",
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = "High-priority notifications for critical security threats"
+            enableVibration(true)
+        }
+
+        manager.createNotificationChannels(listOf(vpnChannel, alertChannel, securityChannel))
     }
 
     companion object {
         const val CHANNEL_VPN = "vpn_service"
         const val CHANNEL_ALERTS = "security_alerts"
+        const val CHANNEL_SECURITY = "gk_security_alerts"
     }
 }

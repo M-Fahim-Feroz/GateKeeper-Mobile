@@ -214,6 +214,19 @@ fun SettingsScreen(
             // ── Advanced / Forensics ────────────────────────────────────────
             SettingsSectionLabel("Advanced & Forensics")
             SettingsCard {
+                SettingsItem(
+                    icon = Icons.Filled.Notifications,
+                    title = "Notification Preferences",
+                    subtitle = "Manage security alerts, heads-up notifications, and sound",
+                    tint = AccentOrange,
+                    onClick = {
+                        val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        }
+                        context.startActivity(intent)
+                    }
+                )
+                SettingsDivider()
                 SettingsSwitch(
                     icon = Icons.Filled.Policy,
                     title = "PCAP Traffic Capture",

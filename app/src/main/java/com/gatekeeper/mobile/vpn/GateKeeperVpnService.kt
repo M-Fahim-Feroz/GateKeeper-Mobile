@@ -53,6 +53,9 @@ class GateKeeperVpnService : VpnService() {
     lateinit var trafficLogger: TrafficLogger
 
     @Inject
+    lateinit var trafficRepository: com.gatekeeper.mobile.data.repository.TrafficRepository
+
+    @Inject
     lateinit var ipRuleDao: com.gatekeeper.mobile.data.db.dao.IpRuleDao
 
     @Inject
@@ -75,6 +78,9 @@ class GateKeeperVpnService : VpnService() {
 
     @Inject
     lateinit var securityAlertRepository: com.gatekeeper.mobile.data.repository.SecurityAlertRepository
+
+    @Inject
+    lateinit var notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 
     private var vpnInterface: ParcelFileDescriptor? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -358,6 +364,10 @@ class GateKeeperVpnService : VpnService() {
 
             val oldInterface = vpnInterface
             try {
+                // 1E: VPN Reconnect Hold to prevent traffic leaks during rule updates
+                trafficRepository.insertSystemEvent("VPN reconnecting — blocking all traffic for ${RECONNECT_HOLD_MS}ms")
+                delay(RECONNECT_HOLD_MS)
+                
                 vpnInterface = builder.establish()
                 Log.i(TAG, "VPN tunnel established.")
                 restartPacketLoop()
@@ -439,6 +449,11 @@ class GateKeeperVpnService : VpnService() {
                                                 packageName = conn.packageName
                                             )
                                         }
+                                        notificationManager.sendTrafficAlert(
+                                            title = "🛡️ Bypass Attempt Blocked",
+                                            message = "$appName tried to connect directly to $targetIp",
+                                            route = "traffic"
+                                        )
                                         Log.w(TAG, "BYPASS DETECTED: $appName -> $targetIp (hardcoded IP, not DNS-resolved)")
                                     }
                                     trafficLogger.log(
@@ -623,5 +638,7 @@ class GateKeeperVpnService : VpnService() {
 
         private val notifDedup = java.util.concurrent.ConcurrentHashMap<String, Long>()
         private const val NOTIF_DEDUP_MS = 5 * 60 * 1000L
+        
+        private const val RECONNECT_HOLD_MS = 2000L
     }
 }

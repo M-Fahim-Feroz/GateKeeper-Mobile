@@ -16,7 +16,8 @@ import javax.inject.Singleton
 @Singleton
 class CellularMonitor @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val securityAlertRepository: SecurityAlertRepository
+    private val securityAlertRepository: SecurityAlertRepository,
+    private val notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 ) {
     private val scope = CoroutineScope(Dispatchers.IO)
     private var lastNetworkType: String = "UNKNOWN"
@@ -106,6 +107,11 @@ class CellularMonitor @Inject constructor(
                     packageName = null
                 )
             }
+            notificationManager.sendSecurityAlert(
+                title = "⚠️ Fake Cell Tower Detected",
+                message = "Cellular downgrade to 2G detected. Possible IMSI catcher.",
+                route = "wifi_scanner"
+            )
             Log.w(TAG, "ALERT: Cellular downgrade to 2G detected — possible IMSI catcher!")
         } else if (gen != "2G") {
             alertedForDowngrade = false

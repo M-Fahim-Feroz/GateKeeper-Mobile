@@ -14,7 +14,8 @@ enum class RogueApResult {
 @Singleton
 class RogueApDetector @Inject constructor(
     private val knownNetworkRepository: KnownNetworkRepository,
-    private val securityAlertRepository: SecurityAlertRepository
+    private val securityAlertRepository: SecurityAlertRepository,
+    private val notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 ) {
     suspend fun checkConnection(ssid: String, bssid: String, securityType: String): RogueApResult {
         // Remove quotes if present
@@ -40,6 +41,11 @@ class RogueApDetector @Inject constructor(
                     severity = "CRITICAL",
                     title = "Evil Twin AP Detected",
                     description = "You connected to '$cleanSsid', but the hardware router ($bssid) is unknown. This may be a malicious honeypot intercepting your traffic."
+                )
+                notificationManager.sendSecurityAlert(
+                    title = "⚠️ Evil Twin Wi-Fi Detected",
+                    message = "Connected to '$cleanSsid' on an unknown router hardware.",
+                    route = "wifi_scanner"
                 )
                 RogueApResult.EVIL_TWIN
             }

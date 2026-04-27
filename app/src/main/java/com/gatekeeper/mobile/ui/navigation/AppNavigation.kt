@@ -33,8 +33,19 @@ import com.gatekeeper.mobile.vpn.GateKeeperVpnService
 private val BOTTOM_NAV_ROUTES = Screen.bottomNavItems.map { it.route }.toSet()
 
 @Composable
-fun AppNavigation(startDestination: String = Screen.Dashboard.route) {
+fun AppNavigation(
+    startDestination: String = Screen.Dashboard.route,
+    deepLinkRoute: String? = null,
+    onDeepLinkConsumed: () -> Unit = {}
+) {
     val navController = rememberNavController()
+
+    androidx.compose.runtime.LaunchedEffect(deepLinkRoute) {
+        if (deepLinkRoute != null) {
+            navController.navigate(deepLinkRoute)
+            onDeepLinkConsumed()
+        }
+    }
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
