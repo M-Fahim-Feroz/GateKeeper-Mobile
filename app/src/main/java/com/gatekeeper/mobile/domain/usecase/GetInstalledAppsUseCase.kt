@@ -16,6 +16,15 @@ import javax.inject.Singleton
 class GetInstalledAppsUseCase @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
+    // Surveillance-tier permissions — same set as PermissionAuditor SURVEILLANCE_PERMS
+    private val SURVEILLANCE_PERMS = setOf(
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.READ_CONTACTS",
+        "android.permission.ACCESS_BACKGROUND_LOCATION"
+    )
+
     operator fun invoke(includeSystem: Boolean = false): List<InstalledApp> {
         val pm = context.packageManager
         val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
@@ -37,12 +46,18 @@ class GetInstalledAppsUseCase @Inject constructor(
                 } catch (e: Exception) { false }
             }
             .map { app ->
+                val sensCount = try {
+                    val pkgInfo = pm.getPackageInfo(app.packageName, PackageManager.GET_PERMISSIONS)
+                    pkgInfo.requestedPermissions?.count { it in SURVEILLANCE_PERMS } ?: 0
+                } catch (_: Exception) { 0 }
+
                 InstalledApp(
                     packageName = app.packageName,
                     appName = pm.getApplicationLabel(app).toString(),
                     icon = try { pm.getApplicationIcon(app) } catch (_: Exception) { null },
                     isSystemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0,
-                    uid = app.uid
+                    uid = app.uid,
+                    sensitivePermCount = sensCount
                 )
             }
             .sortedBy { it.appName.lowercase() }

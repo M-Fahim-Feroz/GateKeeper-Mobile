@@ -22,14 +22,18 @@ class CertAuditViewModel @Inject constructor(
     private val _certs = MutableStateFlow<List<RogueCertInfo>>(emptyList())
     val certs: StateFlow<List<RogueCertInfo>> = _certs.asStateFlow()
 
+    private val _lastScanTime = MutableStateFlow(0L)
+    val lastScanTime: StateFlow<Long> = _lastScanTime.asStateFlow()
+
     init {
-        scanCertificates()
+        rescan()
     }
 
-    fun scanCertificates() {
+    fun rescan() {
         viewModelScope.launch {
             _isLoading.value = true
             _certs.value = certificateAuditor.auditUserCertificates()
+            _lastScanTime.value = System.currentTimeMillis()
             _isLoading.value = false
         }
     }

@@ -60,17 +60,28 @@ class DnsBlocklistManager @Inject constructor(
      * This function suspends forever (until the VPN stops).
      */
     suspend fun observeAndSync() {
-        // Merge blacklist + threat feed domains into one live stream
-        dnsRepository.observeBlacklist().collect { entries ->
-            val domains = entries.filter { it.isActive }.map { it.domain }.toSet()
-            // Also keep threat feed domains
-            val threatDomains = withContext(Dispatchers.IO) {
-                threatFeedRepository.getThreatDomains()
+        // Run both watchers concurrently using coroutineScope
+        kotlinx.coroutines.coroutineScope {
+            launch {
+                dnsRepository.observeBlacklist().collect { entries ->
+                    val domains = entries.filter { it.isActive }.map { it.domain }.toSet()
+                    val threatDomains = withContext(Dispatchers.IO) {
+                        threatFeedRepository.getThreatDomains()
+                    }
+                    blacklistedDomains.clear()
+                    blacklistedDomains.addAll(domains)
+                    blacklistedDomains.addAll(threatDomains)
+                    Log.i(TAG, "DNS blocklist live update: ${blacklistedDomains.size} blocked domains")
+                }
             }
-            blacklistedDomains.clear()
-            blacklistedDomains.addAll(domains)
-            blacklistedDomains.addAll(threatDomains)
-            Log.i(TAG, "DNS blocklist updated live: ${blacklistedDomains.size} blocked domains")
+            launch {
+                dnsRepository.observeWhitelist().collect { entries ->
+                    val domains = entries.filter { it.isActive }.map { it.domain }.toSet()
+                    whitelistedDomains.clear()
+                    whitelistedDomains.addAll(domains)
+                    Log.i(TAG, "DNS allowlist live update: ${whitelistedDomains.size} allowed domains")
+                }
+            }
         }
     }
 

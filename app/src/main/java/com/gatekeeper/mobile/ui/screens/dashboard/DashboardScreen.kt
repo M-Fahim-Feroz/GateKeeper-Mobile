@@ -14,7 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.unit.sp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -23,16 +22,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.navigation.NavController
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.viewModelScope
+import androidx.navigation.NavController
 import com.gatekeeper.mobile.data.db.entity.SecurityAlert
 import com.gatekeeper.mobile.ui.components.*
 import com.gatekeeper.mobile.ui.theme.*
@@ -55,17 +53,15 @@ fun DashboardScreen(
     val appsProtected by viewModel.blockedAppsCount.collectAsState(initial = 0)
     val dnsFiltered by viewModel.dnsBlockedCount.collectAsState(initial = 0)
     val threatCount by viewModel.threatCount.collectAsState(initial = 0)
-    val connectionCount by viewModel.connectionCount.collectAsState(initial = 0)
     val rogueCertsCount by viewModel.rogueCertsCount.collectAsState()
     val securityAlerts by viewModel.unresolvedAlerts.collectAsState(initial = emptyList())
     val allAlerts by viewModel.allAlerts.collectAsState(initial = emptyList())
     val securityScore by viewModel.securityScore.collectAsState(initial = 100)
     val bgSensorCount by viewModel.recentBackgroundSensorAccess.collectAsState(initial = 0)
 
-    // Feature toggle states for status grid
+    // Feature toggle states
     val isDnsLeakEnabled by viewModel.isDnsLeakEnabled.collectAsState()
     val isDnsExfilEnabled by viewModel.isDnsExfilEnabled.collectAsState()
-    val isScreenOffEnabled by viewModel.isScreenOffEnabled.collectAsState()
     val isImsiEnabled by viewModel.isImsiDetectionEnabled.collectAsState()
     val isFirewallBypassEnabled by viewModel.isFirewallBypassEnabled.collectAsState()
     val isBgSensorEnabled by viewModel.isBgSensorAlertsEnabled.collectAsState()
@@ -74,6 +70,10 @@ fun DashboardScreen(
     val vpnLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         val intent = Intent(context, GateKeeperVpnService::class.java).apply { action = GateKeeperVpnService.ACTION_START }
         context.startForegroundService(intent)
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.rescanCerts()
     }
 
     Column(
@@ -112,7 +112,6 @@ fun DashboardScreen(
                 // VPN Hero Card
                 VpnHeroCard(
                     isActive = isVpnActive,
-                    securityScore = securityScore,
                     onToggle = {
                         if (isVpnActive) {
                             context.startService(Intent(context, GateKeeperVpnService::class.java).apply { action = GateKeeperVpnService.ACTION_STOP })
@@ -121,13 +120,7 @@ fun DashboardScreen(
                             if (prepareIntent != null) vpnLauncher.launch(prepareIntent)
                             else context.startForegroundService(Intent(context, GateKeeperVpnService::class.java).apply { action = GateKeeperVpnService.ACTION_START })
                         }
-                    },
-                    rogueCertsCount = rogueCertsCount,
-                    criticalAlertsCount = securityAlerts.count { it.severity == "CRITICAL" },
-                    highAlertsCount = securityAlerts.count { it.severity == "HIGH" },
-                    isDnsLeakEnabled = isDnsLeakEnabled,
-                    isImsiEnabled = isImsiEnabled,
-                    navController = navController
+                    }
                 )
 
                 Spacer(modifier = Modifier.height(20.dp))
@@ -187,7 +180,7 @@ fun DashboardScreen(
                     Spacer(Modifier.height(8.dp))
                 }
 
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(16.dp))
             }
 
             // ── Background Sensor Access Warning ────────────────────────────
@@ -209,68 +202,120 @@ fun DashboardScreen(
                     }
                     Icon(Icons.Filled.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(16.dp))
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(16.dp))
             }
 
-            // ── Security Feature Status Grid ─────────────────────────────────
-            SectionHeader(title = "Detection Engines")
+            // ── Security Tools Grid ─────────────────────────────────────────────
+            SectionHeader(title = "Security Tools")
+            Spacer(Modifier.height(8.dp))
+            
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                QuickActionCard(
+                    icon = Icons.Filled.Shield, title = "App Firewall", subtitle = "Block app access",
+                    gradientColors = GradientSuccess, onClick = { navController.navigate("firewall") }, modifier = Modifier.weight(1f)
+                )
+                QuickActionCard(
+                    icon = Icons.Filled.Dns, title = "DNS Filter", subtitle = "Block ads & trackers",
+                    gradientColors = GradientPurple, onClick = { navController.navigate("dns") }, modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                QuickActionCard(
+                    icon = Icons.Filled.WifiTethering, title = "Wi-Fi Scanner", subtitle = "Analyze local network",
+                    gradientColors = GradientTeal, onClick = { navController.navigate("wifi_scanner") }, modifier = Modifier.weight(1f)
+                )
+                QuickActionCard(
+                    icon = Icons.Filled.VerifiedUser, title = "Hardware Audit", subtitle = "App permissions",
+                    gradientColors = GradientOrange, onClick = { navController.navigate("permission_auditor") }, modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                QuickActionCard(
+                    icon = Icons.Filled.Security, title = "Cert Auditor", subtitle = "Verify CA store",
+                    gradientColors = GradientDanger, onClick = { navController.navigate("cert_audit") }, modifier = Modifier.weight(1f)
+                )
+                QuickActionCard(
+                    icon = Icons.Filled.Language, title = "Threat Intel", subtitle = "Live blocklists",
+                    gradientColors = listOf(Color(0xFF6C63FF), Color(0xFF3B33C3)), onClick = { navController.navigate("threat_feed") }, modifier = Modifier.weight(1f)
+                )
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            // ── Recent Activity ─────────────────────────────────────────────
+            val recentTraffic by viewModel.recentTraffic.collectAsState(initial = emptyList())
+            SectionHeader(title = "Recent Activity")
             Spacer(Modifier.height(8.dp))
 
-            val featureStatuses = listOf(
-                FeatureStatus("VPN Tunnel", isVpnActive, Icons.Filled.Shield, if (isVpnActive) PrimaryCyan else AccentRed, "firewall"),
-                FeatureStatus("DNS Leak Guard", isDnsLeakEnabled, Icons.Filled.GppBad, if (isDnsLeakEnabled) PrimaryCyan else TextTertiary, "dns"),
-                FeatureStatus("DNS Exfil Detect", isDnsExfilEnabled, Icons.Filled.Sensors, if (isDnsExfilEnabled) AccentYellow else TextTertiary, "settings"),
-                FeatureStatus("IMSI Detector", isImsiEnabled, Icons.Filled.CellTower, if (isImsiEnabled) AccentRed else TextTertiary, "settings"),
-                FeatureStatus("Screen-Off Block", isScreenOffEnabled, Icons.Filled.NightlightRound, if (isScreenOffEnabled) AccentOrange else TextTertiary, "firewall"),
-                FeatureStatus("Bypass Detect", isFirewallBypassEnabled, Icons.Filled.BugReport, if (isFirewallBypassEnabled) AccentRed else TextTertiary, "settings"),
-                FeatureStatus("BG Sensor Alert", isBgSensorEnabled, Icons.Filled.Mic, if (isBgSensorEnabled) AccentOrange else TextTertiary, "permission_auditor"),
-                FeatureStatus("Evil Twin Detect", isEvilTwinEnabled, Icons.Filled.Wifi, if (isEvilTwinEnabled) AccentYellow else TextTertiary, "wifi_scanner"),
-            )
-
-            // 2-column grid
-            featureStatuses.chunked(2).forEach { row ->
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    row.forEach { feature ->
-                        FeatureStatusCard(feature, modifier = Modifier.weight(1f)) {
-                            navController.navigate(feature.route)
-                        }
+            if (recentTraffic.isEmpty()) {
+                if (!isVpnActive) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(DarkCard).padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Enable VPN to see live traffic", color = TextTertiary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+                        TextButton(onClick = {
+                            val prepareIntent = VpnService.prepare(context)
+                            if (prepareIntent != null) vpnLauncher.launch(prepareIntent)
+                            else context.startForegroundService(Intent(context, GateKeeperVpnService::class.java).apply { action = GateKeeperVpnService.ACTION_START })
+                        }) { Text("Enable", color = PrimaryCyan) }
                     }
-                    if (row.size == 1) Spacer(Modifier.weight(1f))
+                } else {
+                    Text("No network activity recorded yet", color = TextTertiary, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(12.dp))
                 }
-                Spacer(Modifier.height(8.dp))
+            } else {
+                recentTraffic.forEach { log -> MiniTrafficRow(log) }
+                TextButton(onClick = { navController.navigate("traffic") }, modifier = Modifier.fillMaxWidth()) {
+                    Text("See all traffic →", color = PrimaryCyan, style = MaterialTheme.typography.labelSmall)
+                }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(24.dp))
 
-            // ── Security Modules ─────────────────────────────────────────────
-            SectionHeader(title = "Security Modules")
-            Spacer(Modifier.height(4.dp))
+            // ── Detection Engines ─────────────────────────────────────────────
+            GKSectionHeader("Engine Status")
+            GKListRow(icon = Icons.Filled.Shield, title = "VPN Tunnel",
+                subtitle = if (isVpnActive) "Active — all blocking rules enforced" else "Disabled — no blocking active",
+                trailing = { GKToggle(isVpnActive) { 
+                    if (isVpnActive) context.startService(Intent(context, GateKeeperVpnService::class.java).apply { action = GateKeeperVpnService.ACTION_STOP })
+                    else {
+                        val prepareIntent = VpnService.prepare(context)
+                        if (prepareIntent != null) vpnLauncher.launch(prepareIntent)
+                        else context.startForegroundService(Intent(context, GateKeeperVpnService::class.java).apply { action = GateKeeperVpnService.ACTION_START })
+                    }
+                } },
+                onClick = { navController.navigate("firewall") })
 
-            val modules = listOf(
-                ModuleItem(Icons.Filled.Shield, "App Firewall", "Per-app VPN split-tunnel + screen-off blocking", GradientPrimary, "firewall"),
-                ModuleItem(Icons.Filled.Dns, "DNS Filter", "Domain sinkhole + exfiltration detection", GradientPurple, "dns"),
-                ModuleItem(Icons.Filled.NetworkCheck, "Traffic Monitor", "Real-time per-app connection tracking", GradientSuccess, "traffic"),
-                ModuleItem(Icons.Filled.SmartToy, "AI Assistant", "Natural-language security analysis", GradientOrange, "ai_chat"),
-                ModuleItem(Icons.Filled.Security, "Threat Intel", "Malicious IP/domain feed management", GradientDanger, "threat_feed"),
-                ModuleItem(Icons.Filled.VerifiedUser, "Privacy Guard", "Hardware sensor access + permission audit", listOf(AccentTeal, PrimaryBlue), "permission_auditor"),
-                ModuleItem(Icons.Filled.WifiTethering, "Wi-Fi Security", "Evil Twin & rogue AP analysis", GradientTeal, "wifi_scanner"),
-                ModuleItem(Icons.Filled.GppBad, "SSL Auditor", "Rogue certificate authority detection", listOf(AccentOrange, AccentRed), "cert_audit"),
-            )
+            GKListRow(icon = Icons.Filled.GppBad, title = "DNS Privacy Guard",
+                subtitle = "Stops encrypted DNS bypasses",
+                trailing = { GKToggle(isDnsLeakEnabled) { viewModel.setDnsLeakProtection(it) } },
+                onClick = { navController.navigate("settings/protection") })
 
-            modules.forEach { module ->
-                QuickActionCard(
-                    icon = module.icon,
-                    title = module.title,
-                    subtitle = module.subtitle,
-                    gradientColors = module.gradientColors,
-                    onClick = { navController.navigate(module.route) }
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
+            GKListRow(icon = Icons.Filled.CellTower, title = "IMSI Detector",
+                subtitle = "Fake cell tower warning",
+                trailing = { GKToggle(isImsiEnabled) { viewModel.setImsiDetection(it) } },
+                onClick = { navController.navigate("settings/privacy") })
+                
+            GKListRow(icon = Icons.Filled.Wifi, title = "Evil Twin Detect",
+                subtitle = "Detect duplicate Wi-Fi APs",
+                trailing = { GKToggle(isEvilTwinEnabled) { viewModel.setEvilTwinDetection(it) } },
+                onClick = { navController.navigate("wifi_scanner") })
+                
+            GKListRow(icon = Icons.Filled.BugReport, title = "Bypass Detect",
+                subtitle = "Detect hardcoded IP access",
+                trailing = { GKToggle(isFirewallBypassEnabled) { viewModel.setFirewallBypassDetect(it) } },
+                onClick = { navController.navigate("settings/protection") })
+                
+            GKListRow(icon = Icons.Filled.Mic, title = "BG Sensor Alert",
+                subtitle = "Background camera/mic access",
+                trailing = { GKToggle(isBgSensorEnabled) { viewModel.setBackgroundSensorAlerts(it) } },
+                onClick = { navController.navigate("settings/privacy") })
 
             // ── Recent Alert History ──────────────────────────────────────────
             if (allAlerts.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(24.dp))
                 SectionHeader(title = "Alert History (Last ${allAlerts.take(5).size})")
                 Spacer(Modifier.height(6.dp))
                 val fmt = remember { SimpleDateFormat("MMM d, HH:mm", Locale.getDefault()) }
@@ -290,15 +335,22 @@ fun DashboardScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
 
 // ─── Supporting Composables ──────────────────────────────────────────────────
 
-internal data class ModuleItem(val icon: ImageVector, val title: String, val subtitle: String, val gradientColors: List<Color>, val route: String)
-internal data class FeatureStatus(val label: String, val isActive: Boolean, val icon: ImageVector, val color: Color, val route: String)
+@Composable
+fun SectionHeader(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = TextPrimary
+    )
+}
 
 @Composable
 fun ThreatAlertBanner(
@@ -309,103 +361,52 @@ fun ThreatAlertBanner(
     onClick: (() -> Unit)?,
     onResolve: (() -> Unit)?
 ) {
-    val (bgColor, textColor) = when (severity) {
-        "CRITICAL" -> AccentRed.copy(alpha = 0.12f) to AccentRed
-        "HIGH" -> AccentOrange.copy(alpha = 0.10f) to AccentOrange
-        "MEDIUM" -> AccentYellow.copy(alpha = 0.08f) to AccentYellow
-        else -> PrimaryCyan.copy(alpha = 0.08f) to PrimaryCyan
+    val color = when (severity) {
+        "CRITICAL" -> AccentRed
+        "HIGH" -> AccentOrange
+        "MEDIUM" -> PrimaryCyan
+        else -> TextTertiary
     }
     
-    var expanded by remember { mutableStateOf(false) }
-    
-    val mitigationText = when {
-        title.contains("IMSI") || title.contains("Downgrade") -> "A fake cell tower is forcing your phone to 2G encryption. Do not send SMS or make standard calls right now. Use WhatsApp/Signal instead."
-        title.contains("Rogue") || title.contains("Certificate") -> "A rogue certificate can read your HTTPS traffic (like passwords). Go to Cert Auditor to review and remove it."
-        title.contains("Bypass") -> "An app bypassed the DNS filter using a hardcoded IP address. Check the Firewall to block this app if it's untrusted."
-        title.contains("DNS Leak") -> "An app bypassed GateKeeper using an encrypted DoH server (e.g. 1.1.1.1). Traffic may not be filtered."
-        title.contains("Evil Twin") -> "A fake Wi-Fi network with the same name as yours is trying to steal your connection. Disconnect from Wi-Fi immediately."
-        else -> "Review your security logs and ensure the VPN is active."
-    }
-
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(bgColor)
-            .clickable { if (onClick != null) onClick() else expanded = !expanded }
-            .padding(14.dp)
+            .background(DarkCard)
+            .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .padding(16.dp),
+        verticalAlignment = Alignment.Top
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(36.dp).clip(CircleShape).background(textColor.copy(alpha = 0.15f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(icon, null, tint = textColor, modifier = Modifier.size(18.dp))
+        Box(
+            modifier = Modifier.size(40.dp).clip(CircleShape).background(color.copy(alpha = 0.1f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Box(
+                    modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(color.copy(alpha = 0.15f))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                ) {
+                    Text(severity, style = MaterialTheme.typography.labelSmall, color = color, fontWeight = FontWeight.Bold)
+                }
             }
-            Spacer(Modifier.width(10.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(title, style = MaterialTheme.typography.titleSmall, color = textColor, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.width(6.dp))
-                    Box(
-                        modifier = Modifier.clip(RoundedCornerShape(3.dp)).background(textColor.copy(alpha = 0.15f)).padding(horizontal = 4.dp, vertical = 1.dp)
-                    ) {
-                        Text(severity, style = MaterialTheme.typography.labelSmall, color = textColor, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            Text(description, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            
+            if (onResolve != null) {
+                Spacer(Modifier.height(8.dp))
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    TextButton(onClick = onResolve, modifier = Modifier.height(28.dp), contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)) {
+                        Text("Mark as Resolved", color = color, style = MaterialTheme.typography.labelSmall)
                     }
                 }
-                Text(description, style = MaterialTheme.typography.bodySmall, color = TextSecondary, maxLines = if (expanded) Int.MAX_VALUE else 2)
-            }
-            if (onResolve != null) {
-                IconButton(onClick = onResolve, modifier = Modifier.size(32.dp)) {
-                    Icon(Icons.Filled.CheckCircle, "Resolve", tint = textColor.copy(alpha = 0.7f), modifier = Modifier.size(18.dp))
-                }
-            } else if (onClick == null) {
-                // If it's expandable but has no click action, show an expand icon
-                Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = TextTertiary, modifier = Modifier.size(20.dp))
             }
         }
-
-        // Expanded mitigation advice
-        AnimatedVisibility(visible = expanded) {
-            Column(modifier = Modifier.padding(top = 12.dp)) {
-                Divider(color = GlassBorder)
-                Spacer(modifier = Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.Top) {
-                    Icon(Icons.Filled.Lightbulb, null, tint = AccentYellow, modifier = Modifier.size(14.dp).padding(top = 2.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        mitigationText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = TextPrimary
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FeatureStatusCard(feature: FeatureStatus, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(DarkCard)
-            .clickable(onClick = onClick)
-            .padding(12.dp),
-        horizontalAlignment = Alignment.Start
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(feature.icon, null, tint = feature.color, modifier = Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                if (feature.isActive) "ON" else "OFF",
-                style = MaterialTheme.typography.labelSmall,
-                color = if (feature.isActive) feature.color else TextTertiary,
-                fontWeight = FontWeight.Bold
-            )
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(feature.label, style = MaterialTheme.typography.bodySmall, color = TextPrimary, fontWeight = FontWeight.Medium, maxLines = 1)
     }
 }
 
@@ -414,8 +415,8 @@ fun AlertHistoryRow(alert: SecurityAlert, fmt: SimpleDateFormat) {
     val color = when (alert.severity) {
         "CRITICAL" -> AccentRed
         "HIGH" -> AccentOrange
-        "MEDIUM" -> AccentYellow
-        else -> PrimaryCyan
+        "MEDIUM" -> PrimaryCyan
+        else -> TextTertiary
     }
     Row(
         modifier = Modifier
@@ -455,40 +456,12 @@ private fun alertIcon(type: String): ImageVector = when (type) {
 @Composable
 fun VpnHeroCard(
     isActive: Boolean, 
-    securityScore: Int, 
-    onToggle: () -> Unit,
-    rogueCertsCount: Int = 0,
-    criticalAlertsCount: Int = 0,
-    highAlertsCount: Int = 0,
-    isDnsLeakEnabled: Boolean = true,
-    isImsiEnabled: Boolean = true,
-    navController: NavController? = null
+    onToggle: () -> Unit
 ) {
-    var showBreakdown by remember { mutableStateOf(false) }
-    
     val bgBrush = if (isActive)
-        Brush.linearGradient(listOf(StatusOnline.copy(alpha = 0.06f), PrimaryCyan.copy(alpha = 0.04f)))
+        Brush.linearGradient(listOf(StatusOnline.copy(alpha = 0.08f), PrimaryCyan.copy(alpha = 0.04f)))
     else
         Brush.linearGradient(listOf(DarkCard, DarkCardElevated))
-
-    val scoreColor = when {
-        securityScore >= 80 -> AccentGreen
-        securityScore >= 50 -> AccentOrange
-        else -> AccentRed
-    }
-
-    val animatedScore by animateFloatAsState(
-        targetValue = securityScore / 100f,
-        animationSpec = tween(800),
-        label = "score_anim"
-    )
-
-    val scoreLabel = when {
-        securityScore >= 80 -> "Secure"
-        securityScore >= 70 -> "Moderate"
-        securityScore >= 50 -> "At Risk"
-        else -> "Critical"
-    }
 
     Column(
         modifier = Modifier
@@ -496,111 +469,70 @@ fun VpnHeroCard(
             .clip(RoundedCornerShape(20.dp))
             .background(bgBrush)
             .border(1.dp, if (isActive) StatusOnline.copy(alpha = 0.3f) else BorderDefault, RoundedCornerShape(20.dp))
-            .padding(16.dp)
+            .padding(20.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Ring Chart
+            // Prominent Shield Icon
             Box(
                 modifier = Modifier
-                    .size(120.dp)
-                    .clickable { showBreakdown = !showBreakdown },
+                    .size(80.dp)
+                    .clip(CircleShape)
+                    .background(if (isActive) StatusOnline.copy(alpha = 0.15f) else AccentRed.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                androidx.compose.foundation.Canvas(modifier = Modifier.size(100.dp)) {
-                    // Track
-                    drawArc(
-                        color = BorderDefault,
-                        startAngle = 0f,
-                        sweepAngle = 360f,
-                        useCenter = false,
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 10.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                    )
-                    // Progress
-                    drawArc(
-                        color = scoreColor,
-                        startAngle = -90f,
-                        sweepAngle = 360f * animatedScore,
-                        useCenter = false,
-                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 10.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                    )
-                }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        text = securityScore.toString(),
-                        fontSize = 28.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = scoreColor
-                    )
-                    Text(
-                        text = scoreLabel,
-                        fontSize = 11.sp,
-                        color = TextSecondary
-                    )
-                }
+                Icon(
+                    imageVector = if (isActive) Icons.Filled.Shield else Icons.Filled.GppBad,
+                    contentDescription = null,
+                    tint = if (isActive) StatusOnline else AccentRed,
+                    modifier = Modifier.size(40.dp)
+                )
             }
 
-            Spacer(modifier = Modifier.width(20.dp))
+            Spacer(modifier = Modifier.width(24.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text("System Security", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(
+                    if (isActive) "System Protected" else "Protection Disabled", 
+                    style = MaterialTheme.typography.titleLarge, 
+                    fontWeight = FontWeight.Bold, 
+                    color = if (isActive) AccentGreen else AccentRed
+                )
                 Spacer(modifier = Modifier.height(6.dp))
-                StatusBadge(isActive = isActive, activeText = "VPN Protected", inactiveText = "VPN Disabled")
+                Text(
+                    if (isActive) "All network traffic is being filtered and monitored." else "Your device is currently unprotected.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary,
+                    lineHeight = 16.sp
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 FilledIconButton(
                     onClick = onToggle,
-                    modifier = Modifier.size(48.dp),
-                    shape = CircleShape,
-                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = if (isActive) StatusOnline.copy(alpha = 0.2f) else AccentRed.copy(alpha = 0.2f))
-                ) {
-                    Icon(
-                        imageVector = if (isActive) Icons.Filled.Power else Icons.Filled.PowerOff,
-                        contentDescription = "Toggle VPN",
-                        tint = if (isActive) StatusOnline else AccentRed,
-                        modifier = Modifier.size(24.dp)
+                    modifier = Modifier.height(44.dp).width(120.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = if (isActive) StatusOnline.copy(alpha = 0.2f) else AccentRed.copy(alpha = 0.2f)
                     )
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = if (isActive) Icons.Filled.Power else Icons.Filled.PowerOff,
+                            contentDescription = "Toggle VPN",
+                            tint = if (isActive) StatusOnline else AccentRed,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            if (isActive) "Disconnect" else "Connect",
+                            color = if (isActive) StatusOnline else AccentRed,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
-        }
-
-        // Breakdown
-        AnimatedVisibility(visible = showBreakdown) {
-            Column(modifier = Modifier.padding(top = 16.dp)) {
-                Divider(color = BorderDefault)
-                Spacer(modifier = Modifier.height(12.dp))
-                Text("Score Breakdown", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
-                Spacer(modifier = Modifier.height(8.dp))
-
-                if (!isActive) ScoreRow("VPN disabled", -35) { onToggle() }
-                if (rogueCertsCount > 0) ScoreRow("Rogue certificate found", -20) { navController?.navigate("cert_audit") }
-                if (criticalAlertsCount > 0) ScoreRow("Critical alerts ($criticalAlertsCount)", -20) { }
-                if (highAlertsCount > 0) ScoreRow("High alerts ($highAlertsCount)", -8) { }
-                if (!isDnsLeakEnabled) ScoreRow("DNS Leak Protection off", -5) { navController?.navigate("settings/protection") }
-                if (!isImsiEnabled) ScoreRow("IMSI Detection off", -5) { navController?.navigate("settings/privacy") }
-                
-                if (isActive && rogueCertsCount == 0 && criticalAlertsCount == 0 && highAlertsCount == 0 && isDnsLeakEnabled && isImsiEnabled) {
-                    Text("Your device is fully secured. No deductions.", style = MaterialTheme.typography.bodySmall, color = AccentGreen)
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ScoreRow(reason: String, deduction: Int, fix: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Filled.Warning, null, tint = AccentOrange, modifier = Modifier.size(16.dp))
-        Spacer(Modifier.width(8.dp))
-        Text(reason, style = MaterialTheme.typography.bodySmall, color = TextPrimary, modifier = Modifier.weight(1f))
-        Text("$deduction pts", style = MaterialTheme.typography.labelSmall, color = AccentRed)
-        Spacer(Modifier.width(12.dp))
-        TextButton(onClick = fix, modifier = Modifier.height(24.dp), contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-            Text("Fix \u2192", style = MaterialTheme.typography.labelSmall, color = PrimaryCyan)
         }
     }
 }
@@ -617,24 +549,39 @@ fun QuickActionCard(
         colors = CardDefaults.cardColors(containerColor = DarkCard),
         border = androidx.compose.foundation.BorderStroke(1.dp, Brush.horizontalGradient(gradientColors.map { it.copy(alpha = 0.2f) }))
     ) {
-        Row(
+        Column(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalArrangement = Arrangement.Center
         ) {
             Box(
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
                     .background(Brush.linearGradient(gradientColors.map { it.copy(alpha = 0.18f) })),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(icon, null, tint = gradientColors.first(), modifier = Modifier.size(22.dp))
+                Icon(icon, null, tint = gradientColors.first(), modifier = Modifier.size(20.dp))
             }
-            Spacer(modifier = Modifier.width(14.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = TextPrimary)
-                Spacer(modifier = Modifier.height(1.dp))
-                Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextTertiary)
-            }
-            Icon(Icons.Filled.ChevronRight, null, tint = TextTertiary.copy(alpha = 0.6f), modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextTertiary)
         }
+    }
+}
+
+@Composable
+fun MiniTrafficRow(log: com.gatekeeper.mobile.data.db.entity.ConnectionLog) {
+    val formatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val iconTint = if (log.wasBlocked) AccentRed else AccentGreen
+        Icon(
+            if (log.wasBlocked) Icons.Filled.Block else Icons.Filled.CheckCircle,
+            null, tint = iconTint, modifier = Modifier.size(14.dp)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(log.appName ?: "System", style = MaterialTheme.typography.bodySmall, color = TextPrimary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(formatter.format(Date(log.timestamp)), style = MaterialTheme.typography.labelSmall, color = TextTertiary)
     }
 }

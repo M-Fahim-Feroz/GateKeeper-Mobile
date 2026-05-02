@@ -9,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -33,21 +34,21 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
-    // Limit to 100 items max to prevent LazyColumn from working on huge lists.
     val allConnections by viewModel.recentConnections.collectAsState(initial = emptyList())
-    val connections = remember(allConnections) { allConnections.take(100) }
+    val connections = remember(allConnections) { allConnections.take(200) }
 
     val totalCount by viewModel.totalConnections.collectAsState(initial = 0)
-    val blockedCount = remember(connections) { connections.count { it.wasBlocked } }
-
     val timeRange by viewModel.timeRange.collectAsState()
     val filterMode by viewModel.filterMode.collectAsState()
 
+    val blockedCount = remember(connections) { connections.count { it.wasBlocked && !it.isSystemEvent } }
+    val allowedCount = remember(connections) { connections.count { !it.wasBlocked && !it.isSystemEvent } }
+
     var selectedLog by remember { mutableStateOf<ConnectionLog?>(null) }
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
     Column(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
-        // ── Header ────────────────────────────────────────────────────────────
+        // ── Header ──────────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -65,39 +66,69 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                 Spacer(Modifier.width(12.dp))
                 Column {
                     Text("Traffic Monitor", style = MaterialTheme.typography.displaySmall, color = TextPrimary)
-                    Text("Real-time network activity", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("Network connection log · last $timeRange", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 }
-                Spacer(Modifier.weight(1f))
             }
 
             Spacer(Modifier.height(16.dp))
 
-            if (totalCount > 0) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PulsingDots(color = AccentGreen)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Receiving live traffic...", style = MaterialTheme.typography.labelSmall, color = AccentGreen)
+            // Live stats
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // Blocked stat — red
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(AccentRed.copy(alpha = 0.08f))
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Filled.Block, null, tint = AccentRed, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text("$blockedCount", style = MaterialTheme.typography.titleLarge, color = AccentRed, fontWeight = FontWeight.Bold)
+                    Text("Blocked", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                }
+                // Allowed stat — green
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(AccentGreen.copy(alpha = 0.08f))
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Filled.CheckCircle, null, tint = AccentGreen, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text("$allowedCount", style = MaterialTheme.typography.titleLarge, color = AccentGreen, fontWeight = FontWeight.Bold)
+                    Text("Allowed", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                }
+                // Total stat — cyan
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(PrimaryCyan.copy(alpha = 0.06f))
+                        .padding(12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(Icons.Filled.Storage, null, tint = PrimaryCyan, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.height(4.dp))
+                    Text("$totalCount", style = MaterialTheme.typography.titleLarge, color = PrimaryCyan, fontWeight = FontWeight.Bold)
+                    Text("Total ever", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
                 }
             }
 
             Spacer(Modifier.height(14.dp))
 
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                StatCard("Total Events", "$totalCount", gradientColors = listOf(AccentGreen, PrimaryCyan), modifier = Modifier.weight(1f))
-                StatCard("Blocked", "$blockedCount", gradientColors = GradientDanger, modifier = Modifier.weight(1f))
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // Filters
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                GKFilterChips(
-                    options = listOf("1h", "24h", "7d"),
-                    selected = timeRange,
-                    onSelect = { viewModel.setTimeRange(it) }
-                )
-            }
+            // Time range filter
+            GKFilterChips(
+                options = listOf("1h", "24h", "7d"),
+                selected = timeRange,
+                onSelect = { viewModel.setTimeRange(it) }
+            )
             Spacer(Modifier.height(8.dp))
+
+            // Status filter
             GKFilterChips(
                 options = listOf("All", "Blocked", "Allowed", "System"),
                 selected = filterMode,
@@ -105,14 +136,51 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
             )
         }
 
-        // ── List ──────────────────────────────────────────────────────────────
+        // ── Legend ────────────────────────────────────────────────────────
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(DarkSurface)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(AccentRed))
+                Spacer(Modifier.width(4.dp))
+                Text("Blocked by firewall/DNS", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(AccentGreen))
+                Spacer(Modifier.width(4.dp))
+                Text("Allowed", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(PrimaryCyan))
+                Spacer(Modifier.width(4.dp))
+                Text("System", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+            }
+        }
+
+        // ── Connection List ───────────────────────────────────────────────
         if (connections.isEmpty()) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
                     Icon(Icons.Outlined.CloudOff, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
                     Spacer(Modifier.height(12.dp))
-                    Text("No traffic recorded yet", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                    Text("Adjust filters or turn on VPN", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
+                    Text("No connections recorded", color = TextSecondary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        when (filterMode) {
+                            "Blocked" -> "No blocked connections in the last $timeRange.\nAll traffic passed through the VPN cleanly."
+                            "Allowed" -> "No allowed connections in the last $timeRange."
+                            "System" -> "No VPN state change events recorded."
+                            else -> "Enable the VPN to start monitoring network traffic."
+                        },
+                        color = TextTertiary,
+                        style = MaterialTheme.typography.bodySmall,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
                 }
             }
         } else {
@@ -120,6 +188,14 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
+                item {
+                    Text(
+                        "${connections.size} connection${if (connections.size != 1) "s" else ""} · $timeRange",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary,
+                        modifier = Modifier.padding(bottom = 6.dp)
+                    )
+                }
                 items(connections, key = { "${it.timestamp}_${it.id}_${it.packageName}" }) { log ->
                     ConnectionLogItem(log, onClick = { selectedLog = log })
                 }
@@ -128,30 +204,130 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
         }
     }
 
+    // ── Detail Sheet ──────────────────────────────────────────────────────
     if (selectedLog != null) {
+        val log = selectedLog!!
         ModalBottomSheet(
             onDismissRequest = { selectedLog = null },
             sheetState = sheetState,
             containerColor = DarkSurface
         ) {
-            Column(modifier = Modifier.padding(24.dp).fillMaxWidth()) {
-                Text("Connection Details", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
-                Spacer(Modifier.height(16.dp))
-                
-                if (selectedLog!!.isSystemEvent) {
-                    Text("Event: ${selectedLog!!.systemEventReason}", color = TextSecondary)
-                } else {
-                    Text("App: ${selectedLog!!.appName}", color = TextSecondary)
-                    Text("Package: ${selectedLog!!.packageName}", color = TextSecondary)
-                    Text("Remote IP: ${selectedLog!!.remoteIp}", color = TextSecondary)
-                    Text("Remote Host: ${selectedLog!!.remoteHostname ?: "Unknown"}", color = TextSecondary)
-                    Text("Protocol: ${selectedLog!!.protocol}", color = TextSecondary)
-                    Text("Port: ${selectedLog!!.remotePort}", color = TextSecondary)
+            Column(modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp).fillMaxWidth()) {
+                // Sheet header
+                val accentColor = when {
+                    log.isSystemEvent -> PrimaryCyan
+                    log.wasBlocked -> AccentRed
+                    else -> AccentGreen
                 }
-                Spacer(Modifier.height(24.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
+                            .background(accentColor.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            if (log.isSystemEvent) Icons.Filled.Info
+                            else if (log.wasBlocked) Icons.Filled.Block
+                            else Icons.Filled.CheckCircle,
+                            null, tint = accentColor, modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            if (log.isSystemEvent) "System Event" else log.appName ?: "Unknown App",
+                            style = MaterialTheme.typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold
+                        )
+                        Box(
+                            modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(accentColor.copy(alpha = 0.15f))
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                when {
+                                    log.isSystemEvent -> "SYSTEM"
+                                    log.wasBlocked -> "BLOCKED"
+                                    else -> "ALLOWED"
+                                },
+                                style = MaterialTheme.typography.labelSmall, color = accentColor, fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(20.dp))
+                Divider(color = BorderDefault)
+                Spacer(Modifier.height(16.dp))
+
+                if (log.isSystemEvent) {
+                    DetailRow("Event", log.systemEventReason ?: "Unknown", Icons.Filled.Info)
+                } else {
+                    val fmt = remember { SimpleDateFormat("MMM d, HH:mm:ss", Locale.getDefault()) }
+                    DetailRow("App", "${log.appName}\n${log.packageName}", Icons.Filled.Apps)
+                    DetailRow("Remote IP", log.remoteIp, Icons.Filled.Router)
+                    if (log.remoteHostname != null) DetailRow("Hostname", log.remoteHostname, Icons.Filled.Language)
+                    DetailRow("Protocol", "${log.protocol} · Port ${log.remotePort}", Icons.Filled.Cable)
+                    if (log.country != null) DetailRow("Country", log.country, Icons.Filled.Public)
+                    DetailRow("Time", fmt.format(Date(log.timestamp)), Icons.Filled.Schedule)
+                    if (log.bytesIn > 0 || log.bytesOut > 0) {
+                        DetailRow("Data", "↓ ${formatBytes(log.bytesIn)}  ↑ ${formatBytes(log.bytesOut)}", Icons.Filled.SwapVert)
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Action buttons
+                    val context = LocalContext.current
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        OutlinedButton(
+                            onClick = {
+                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                clipboard.setPrimaryClip(ClipData.newPlainText("IP", log.remoteIp))
+                                selectedLog = null
+                            },
+                            modifier = Modifier.weight(1f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderDefault)
+                        ) {
+                            Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(14.dp), tint = TextSecondary)
+                            Spacer(Modifier.width(6.dp))
+                            Text("Copy IP", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                        }
+                        if (log.remoteHostname != null) {
+                            OutlinedButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Host", log.remoteHostname))
+                                    selectedLog = null
+                                },
+                                modifier = Modifier.weight(1f),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderDefault)
+                            ) {
+                                Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(14.dp), tint = TextSecondary)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Copy Host", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+}
+
+@Composable
+private fun DetailRow(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
+        Icon(icon, null, tint = TextTertiary, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+        Spacer(Modifier.width(10.dp))
+        Column {
+            Text(label, style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+            Text(value, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+        }
+    }
+}
+
+private fun formatBytes(bytes: Long): String = when {
+    bytes >= 1_000_000 -> "%.1f MB".format(bytes / 1_000_000.0)
+    bytes >= 1_000 -> "%.1f KB".format(bytes / 1_000.0)
+    else -> "$bytes B"
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -165,26 +341,24 @@ fun ConnectionLogItem(log: ConnectionLog, onClick: () -> Unit) {
         else -> AccentGreen
     }
 
-    var showMenu by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(DarkCard)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = { showMenu = true }
-            )
+            .combinedClickable(onClick = onClick)
     ) {
-        // Colored left border
-        Box(modifier = Modifier.width(4.dp).height(66.dp).background(accentColor))
+        // Colored left border indicating status
+        Box(modifier = Modifier.width(4.dp).height(64.dp).background(accentColor))
 
-        Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // App/event icon
             Box(
-                modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp))
-                    .background(accentColor.copy(alpha = 0.1f)),
+                modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
+                    .background(accentColor.copy(alpha = 0.10f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -195,7 +369,7 @@ fun ConnectionLogItem(log: ConnectionLog, onClick: () -> Unit) {
                     },
                     contentDescription = null,
                     tint = accentColor,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(20.dp)
                 )
             }
 
@@ -205,33 +379,32 @@ fun ConnectionLogItem(log: ConnectionLog, onClick: () -> Unit) {
                 if (isSystem) {
                     Text(
                         text = log.systemEventReason ?: "System Event",
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary,
                         maxLines = 1
                     )
-                    Text("GateKeeper VPN", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                    Text("VPN / GateKeeper", color = TextTertiary, style = MaterialTheme.typography.labelSmall)
                 } else {
                     Text(
                         text = log.remoteHostname ?: log.remoteIp,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = TextPrimary,
                         maxLines = 1
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = log.appName ?: log.packageName ?: "Unknown App",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
-                            maxLines = 1,
-                            modifier = Modifier.weight(1f, fill = false)
-                        )
-                        Text(" • ${log.protocol}", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
-                    }
+                    Text(
+                        text = "${log.appName ?: log.packageName} · ${log.protocol}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextTertiary,
+                        maxLines = 1
+                    )
                 }
             }
 
+            Spacer(Modifier.width(8.dp))
+
+            // Right side: time + status badge
             Column(horizontalAlignment = Alignment.End) {
                 val format = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
                 Text(
@@ -244,42 +417,17 @@ fun ConnectionLogItem(log: ConnectionLog, onClick: () -> Unit) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
                         .background(accentColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
                 ) {
                     Text(
                         when {
-                            isSystem -> "SYSTEM"
-                            isBlocked -> "BLOCKED"
-                            else -> "ALLOWED"
+                            isSystem -> "SYS"
+                            isBlocked -> "BLOCK"
+                            else -> "OK"
                         },
                         style = MaterialTheme.typography.labelSmall,
                         color = accentColor,
                         fontWeight = FontWeight.Bold
-                    )
-                }
-            }
-
-            DropdownMenu(
-                expanded = showMenu,
-                onDismissRequest = { showMenu = false },
-                modifier = Modifier.background(DarkSurfaceVariant)
-            ) {
-                DropdownMenuItem(
-                    text = { Text("Copy IP", color = TextPrimary) },
-                    onClick = {
-                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                        clipboard.setPrimaryClip(ClipData.newPlainText("IP", log.remoteIp))
-                        showMenu = false
-                    }
-                )
-                if (log.remoteHostname != null) {
-                    DropdownMenuItem(
-                        text = { Text("Copy Hostname", color = TextPrimary) },
-                        onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            clipboard.setPrimaryClip(ClipData.newPlainText("Hostname", log.remoteHostname))
-                            showMenu = false
-                        }
                     )
                 }
             }

@@ -35,9 +35,14 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
 
     var searchQuery by remember { mutableStateOf("") }
     var showExcludedOnly by remember { mutableStateOf(false) }
+    var showAllowedOnly by remember { mutableStateOf(false) }
 
     val displayed = apps
-        .filter { if (showExcludedOnly) it.isBlocked else true }
+        .filter { when {
+            showExcludedOnly -> it.isBlocked
+            showAllowedOnly  -> !it.isBlocked
+            else             -> true
+        }}
         .filter { it.appName.contains(searchQuery, ignoreCase = true) || it.packageName.contains(searchQuery, ignoreCase = true) }
 
     Column(
@@ -96,12 +101,37 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                 singleLine = true
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(16.dp))
+
+            // VPN OS Limitation Warning
+            androidx.compose.animation.AnimatedVisibility(visible = excludedCount > 0) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(AccentOrange.copy(alpha = 0.1f))
+                        .padding(16.dp)
+                ) {
+                    Row {
+                        Icon(Icons.Filled.WarningAmber, null, tint = AccentOrange, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Global DNS Filter Paused", style = MaterialTheme.typography.titleSmall, color = AccentOrange, fontWeight = FontWeight.Bold)
+                            Text(
+                                "Due to Android OS limitations, when the App Firewall is active, all unblocked apps must bypass the VPN entirely to maintain internet speed. The DNS Filter will only resume when all apps are unblocked.",
+                                style = MaterialTheme.typography.bodySmall, color = TextSecondary, modifier = Modifier.padding(top = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(
-                    selected = !showExcludedOnly,
-                    onClick = { showExcludedOnly = false },
+                    selected = !showExcludedOnly && !showAllowedOnly,
+                    onClick = { showExcludedOnly = false; showAllowedOnly = false },
                     label = { Text("All (${apps.size})") },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = PrimaryCyan.copy(alpha = 0.15f),
@@ -110,11 +140,20 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                 )
                 FilterChip(
                     selected = showExcludedOnly,
-                    onClick = { showExcludedOnly = true },
+                    onClick = { showExcludedOnly = true; showAllowedOnly = false },
                     label = { Text("Blocked ($excludedCount)") },
                     colors = FilterChipDefaults.filterChipColors(
                         selectedContainerColor = AccentRed.copy(alpha = 0.15f),
                         selectedLabelColor = AccentRed
+                    )
+                )
+                FilterChip(
+                    selected = showAllowedOnly,
+                    onClick = { showAllowedOnly = true; showExcludedOnly = false },
+                    label = { Text("Allowed (${apps.size - excludedCount})") },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AccentGreen.copy(alpha = 0.15f),
+                        selectedLabelColor = AccentGreen
                     )
                 )
             }
@@ -174,15 +213,23 @@ fun AppFirewallItem(
                 try { context.packageManager.getApplicationIcon(app.packageName) } catch (e: Exception) { null }
             }
 
-            Box(
-                modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp))
-                    .background(if (excluded) AccentOrange.copy(alpha = 0.12f) else PrimaryCyan.copy(alpha = 0.08f)),
-                contentAlignment = Alignment.Center
-            ) {
-                if (appIcon != null) {
-                    coil.compose.AsyncImage(model = appIcon, contentDescription = app.appName, modifier = Modifier.size(28.dp))
-                } else {
-                    Icon(Icons.Filled.Apps, null, tint = if (excluded) AccentOrange else PrimaryCyan, modifier = Modifier.size(22.dp))
+            Box(contentAlignment = Alignment.TopEnd) {
+                Box(
+                    modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp))
+                        .background(if (excluded) AccentOrange.copy(alpha = 0.12f) else PrimaryCyan.copy(alpha = 0.08f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (appIcon != null) {
+                        coil.compose.AsyncImage(model = appIcon, contentDescription = app.appName, modifier = Modifier.size(28.dp))
+                    } else {
+                        Icon(Icons.Filled.Apps, null, tint = if (excluded) AccentOrange else PrimaryCyan, modifier = Modifier.size(22.dp))
+                    }
+                }
+                // Risk dot overlay
+                if (app.sensitivePermCount >= 3) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(AccentRed))
+                } else if (app.sensitivePermCount >= 1) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(AccentOrange))
                 }
             }
 

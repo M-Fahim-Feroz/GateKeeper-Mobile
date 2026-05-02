@@ -1,6 +1,8 @@
 package com.gatekeeper.mobile.ui.screens.wifiscanner
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -158,34 +160,111 @@ fun WifiScannerScreen(
 
 @Composable
 fun DeviceItem(result: WifiNetworkInfo) {
-    val isSecure = result.securityScore >= 7
-    val scoreColor = if (isSecure) AccentGreen else AccentOrange
-    val hostTypeIcon = Icons.Filled.Router
-    
-    Column(
+    var expanded by remember { mutableStateOf(false) }
+
+    val leftBorderColor = when {
+        result.isEvilTwin  -> AccentRed
+        result.isSuspicious -> AccentOrange
+        else               -> AccentGreen.copy(alpha = 0f) // invisible for clean networks
+    }
+
+    val badgeText = when {
+        result.isEvilTwin   -> "Evil Twin"
+        result.isSuspicious -> "Suspicious"
+        result.securityType == "OPEN" -> "No Password"
+        else                -> "Secure"
+    }
+    val badgeColor = when {
+        result.isEvilTwin   -> AccentRed
+        result.isSuspicious -> AccentOrange
+        result.securityType == "OPEN" -> AccentRed
+        else                -> AccentGreen
+    }
+
+    val wifiIcon = Icons.Filled.Wifi
+    val signalTint = when {
+        result.isEvilTwin || result.isSuspicious -> badgeColor
+        result.securityType == "OPEN" -> AccentOrange
+        else -> AccentGreen
+    }
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(DarkCard)
-            .padding(16.dp)
+            .then(
+                if (result.isEvilTwin || result.isSuspicious)
+                    Modifier.border(1.dp, leftBorderColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
+                else Modifier
+            )
+            .clickable(enabled = result.isEvilTwin || result.isSuspicious) { expanded = !expanded }
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        // Left accent bar for threats
+        if (result.isEvilTwin || result.isSuspicious) {
             Box(
-                modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(PrimaryCyan.copy(alpha = 0.1f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(hostTypeIcon, null, tint = PrimaryCyan, modifier = Modifier.size(20.dp))
+                modifier = Modifier
+                    .width(3.dp)
+                    .fillMaxHeight()
+                    .background(leftBorderColor, RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp))
+            )
+        }
+
+        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(signalTint.copy(alpha = 0.1f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(wifiIcon, null, tint = signalTint, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        result.ssid.ifEmpty { "Hidden Network" },
+                        style = MaterialTheme.typography.titleSmall,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        buildString {
+                            append(result.bssid)
+                            if (result.vendorName != null) append(" · ${result.vendorName}")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(99.dp))
+                        .background(badgeColor.copy(alpha = 0.15f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp)
+                ) {
+                    Text(
+                        badgeText.uppercase(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = badgeColor,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
             }
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(result.ssid.ifEmpty { "Hidden Network" }, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text(result.bssid, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
-            }
-            
-            Box(
-                modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(scoreColor.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(result.securityType, style = MaterialTheme.typography.labelSmall, color = scoreColor, fontWeight = FontWeight.Bold)
+
+            // Expandable threat detail for evil twin / suspicious
+            if ((result.isEvilTwin || result.isSuspicious) && expanded) {
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = GlassBorder)
+                Spacer(Modifier.height(12.dp))
+                val detailText = if (result.isEvilTwin)
+                    "This network matches a known Wi-Fi name but uses a different MAC address. This may be an Evil Twin access point intercepting your traffic.\n\nRecommendation: Disconnect immediately and use mobile data."
+                else
+                    "This is an unknown network broadcasting an unusually strong signal. It may be a hotspot set up to capture your traffic.\n\nRecommendation: Verify the network with the venue before connecting."
+                Text(
+                    detailText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextSecondary
+                )
             }
         }
     }

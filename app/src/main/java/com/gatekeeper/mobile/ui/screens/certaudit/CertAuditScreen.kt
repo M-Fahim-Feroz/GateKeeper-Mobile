@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -34,6 +35,10 @@ fun CertAuditScreen(
 ) {
     val isLoading by viewModel.isLoading.collectAsState()
     val certs by viewModel.certs.collectAsState()
+    val lastScanTime by viewModel.lastScanTime.collectAsState()
+
+    // Always rescan when screen opens so data is fresh
+    LaunchedEffect(Unit) { viewModel.rescan() }
 
     Scaffold(
         topBar = {
@@ -89,7 +94,21 @@ fun CertAuditScreen(
                         Icon(Icons.Default.Security, null, tint = AccentGreen, modifier = Modifier.size(64.dp))
                         Spacer(Modifier.height(16.dp))
                         Text("Trust Store Clean", style = MaterialTheme.typography.titleLarge, color = TextPrimary)
-                        Text("No user-installed certificates found. Your HTTPS connections are secure.", color = TextSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        Spacer(Modifier.height(4.dp))
+                        Text("No user-installed certificates found.", color = TextSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                        if (lastScanTime > 0L) {
+                            Spacer(Modifier.height(8.dp))
+                            val elapsed = (System.currentTimeMillis() - lastScanTime) / 1000 / 60
+                            val label = if (elapsed < 1) "just now" else "${elapsed}m ago"
+                            Text("Last scanned: $label", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        OutlinedButton(
+                            onClick = { viewModel.rescan() },
+                            border = androidx.compose.foundation.BorderStroke(1.dp, PrimaryCyan)
+                        ) {
+                            Text("Scan Now", color = PrimaryCyan)
+                        }
                     }
                 }
             } else {

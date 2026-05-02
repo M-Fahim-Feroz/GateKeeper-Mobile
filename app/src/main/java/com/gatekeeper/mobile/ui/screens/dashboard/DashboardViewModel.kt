@@ -45,6 +45,8 @@ class DashboardViewModel @Inject constructor(
     val dnsBlockedCount: Flow<Int> = dnsRepository.observeBlacklistCount()
     val connectionCount: Flow<Int> = trafficRepository.observeTotalCount()
     val threatCount: Flow<Int> = threatFeedRepository.observeCount()
+    
+    val recentTraffic = trafficRepository.observeRecent(3)
 
     private val _rogueCertsCount = MutableStateFlow(0)
     val rogueCertsCount: StateFlow<Int> = _rogueCertsCount.asStateFlow()
@@ -113,7 +115,7 @@ class DashboardViewModel @Inject constructor(
         score.coerceIn(0, 100)
     }
 
-    init {
+    fun rescanCerts() {
         viewModelScope.launch {
             val certs = certificateAuditor.auditUserCertificates()
             _rogueCertsCount.value = certs.size
@@ -122,4 +124,10 @@ class DashboardViewModel @Inject constructor(
 
     suspend fun resolveAlert(id: Long) = securityAlertRepository.resolveAlert(id)
     suspend fun clearAllAlerts() = securityAlertRepository.clearAll()
+
+    fun setDnsLeakProtection(enabled: Boolean) = viewModelScope.launch { settingsRepository.setDnsLeakProtection(enabled) }
+    fun setImsiDetection(enabled: Boolean) = viewModelScope.launch { settingsRepository.setImsiDetection(enabled) }
+    fun setEvilTwinDetection(enabled: Boolean) = viewModelScope.launch { settingsRepository.setEvilTwinDetection(enabled) }
+    fun setFirewallBypassDetect(enabled: Boolean) = viewModelScope.launch { settingsRepository.setFirewallBypassDetect(enabled) }
+    fun setBackgroundSensorAlerts(enabled: Boolean) = viewModelScope.launch { settingsRepository.setBackgroundSensorAlerts(enabled) }
 }

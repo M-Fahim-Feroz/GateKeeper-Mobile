@@ -139,6 +139,9 @@ class GateKeeperVpnService : VpnService() {
         // Load DNS blocklists into memory immediately
         dnsBlocklistManager.loadFromDatabase()
 
+        // 2F: Prune PCAP files older than 24h on every VPN start
+        PcapWriter.pruneStaleFiles(this)
+
         // Initialize packet processing pipeline
         packetFilter = PacketFilter()
         dnsResolver = DnsResolver(this, dnsBlocklistManager)
@@ -309,10 +312,11 @@ class GateKeeperVpnService : VpnService() {
                     // ==========================================
                     // MODE: STRICT LOCKDOWN APP FIREWALL
                     // ==========================================
-                    // When an app is blocked, we force its ENTIRE network traffic (TCP, UDP, ICMP) 
-                    // into the VPN and drop it. This defeats hardcoded IP bypasses (like WhatsApp/Instagram).
-                    // Because we use allowBypass(), all unblocked apps (Chrome, etc) will cleanly bypass 
-                    // the VPN and use normal Wi-Fi at maximum native speed!
+                    // When an app is blocked, we MUST force its ENTIRE network traffic (TCP, UDP, ICMP) 
+                    // into the VPN and drop it. This defeats hardcoded IP bypasses (like WhatsApp).
+                    // Limitation: Because Android VpnService does not support per-app routing rules, 
+                    // using addAllowedApplication() means unblocked apps will bypass the VPN entirely,
+                    // which means the Global DNS Filter will pause for unblocked apps while the Firewall is active.
                     Log.i(TAG, "VPN Mode: App Firewall (Strict Lockdown) for ${blockedPackages.size} apps")
                     
                     builder.addRoute("0.0.0.0", 0)
@@ -323,12 +327,17 @@ class GateKeeperVpnService : VpnService() {
                     // ==========================================
                     // MODE: GLOBAL DNS FILTER (Split-Tunnel)
                     // ==========================================
-                    // When no apps are blocked, we run a phone-wide DNS interceptor to provide
-                    // URL Blocking and custom IP blocking for every app on the device.
-                    Log.i(TAG, "VPN Mode: Global DNS Filter (Split-Tunnel)")
+                    // When no apps are blocked, we run a phone-wide DNS interceptor.
+                    
+                    Log.i(TAG, "VPN Mode: Unified DNS Filter")
                     
                     builder.addDnsServer(VPN_DNS_ADDRESS)
                     builder.addRoute(VPN_DNS_ADDRESS, 32)
+                    
+                    // Add an IPv6 DNS server to prevent Android from bypassing our IPv4 DNS
+                    builder.addDnsServer("fd00:1:fd00:1:fd00:1:fd00:2")
+                    builder.addRoute("fd00:1:fd00:1:fd00:1:fd00:2", 128)
+
                     builder.addDisallowedApplication(packageName)
 
                     // Inject custom user blocked IPs & threat feeds
@@ -357,7 +366,6 @@ class GateKeeperVpnService : VpnService() {
                         } catch (e: Exception) {}
                     }
                 }
-
             } catch (e: Exception) {
                 Log.e(TAG, "Error configuring VPN routing", e)
             }
@@ -413,10 +421,18 @@ class GateKeeperVpnService : VpnService() {
                     packetCopy.put(buffer.array(), 0, length)
                     packetCopy.flip()
 
-                    // F18: Write raw packet to PCAP file if enabled
+                    // F18: Write raw packet to PCAP file if enabled, with rolling rotation
                     if (isPcapRecording && currentPcapFile != null) {
                         launch(Dispatchers.IO) {
                             PcapWriter.appendPacket(currentPcapFile!!, packetCopy.array(), length)
+                            // Rotate if file exceeded 50 MB
+                            if ((currentPcapFile?.length() ?: 0L) > PcapWriter.PCAP_MAX_SIZE_BYTES) {
+                                val result = PcapWriter.createNewFile(this@GateKeeperVpnService)
+                                if (result.isSuccess) {
+                                    currentPcapFile = result.getOrNull()
+                                    Log.i(TAG, "PCAP file rotated → ${currentPcapFile?.name}")
+                                }
+                            }
                         }
                     }
 

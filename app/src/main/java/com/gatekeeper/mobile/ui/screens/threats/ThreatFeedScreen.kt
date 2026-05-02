@@ -119,6 +119,35 @@ fun ThreatFeedScreen(
                 }
             }
 
+            // ── Active Feeds Section ──
+            if (importedFeedNames.isNotEmpty()) {
+                item {
+                    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
+                        SectionHeader(title = "Active Feeds (${importedFeedNames.size})")
+                        Spacer(Modifier.height(8.dp))
+                    }
+                }
+                
+                val grouped = allThreats.groupBy { it.feedName }
+                items(grouped.entries.toList()) { (feedName, entries) ->
+                    val sourceUrl = entries.first().feedSource
+                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                        GKListRow(
+                            icon = Icons.Filled.CheckCircle, iconTint = AccentGreen,
+                            title = feedName,
+                            subtitle = "${entries.size} indicators",
+                            trailing = {
+                                IconButton(onClick = { viewModel.removeFeed(sourceUrl) }) {
+                                    Icon(Icons.Filled.DeleteOutline, null, tint = AccentRed)
+                                }
+                            }
+                        )
+                    }
+                }
+                
+                item { Spacer(Modifier.height(16.dp)) }
+            }
+
             // ── Loading indicator ──
             if (isLoading) {
                 item {
@@ -189,9 +218,15 @@ fun ThreatFeedScreen(
                         FilledIconButton(
                             onClick = {
                                 if (customFeedUrl.isNotBlank() && !isLoading) {
+                                    val safeUrl = if (!customFeedUrl.startsWith("http://") && !customFeedUrl.startsWith("https://")) {
+                                        "https://" + customFeedUrl.trim()
+                                    } else {
+                                        customFeedUrl.trim()
+                                    }
+                                    
                                     val customFeed = ThreatFeedViewModel.FeedSource(
-                                        name = customFeedUrl.substringAfterLast("/").ifBlank { "Custom Feed" },
-                                        url = customFeedUrl.trim(),
+                                        name = safeUrl.substringAfterLast("/").ifBlank { "Custom Feed" },
+                                        url = safeUrl,
                                         type = "domain",
                                         threatType = "custom",
                                         description = "Manually imported feed"
@@ -249,76 +284,6 @@ fun ThreatFeedScreen(
                 )
             }
 
-            // ── Imported Threats List ──
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    SectionHeader(title = "Active Indicators")
-                }
-            }
-            if (allThreats.isEmpty()) {
-                item {
-                    GKEmptyState(
-                        icon = Icons.Outlined.Security,
-                        title = "No Threats Imported",
-                        subtitle = "Import a curated feed above or add a custom URL to start blocking threats."
-                    )
-                }
-            } else {
-                val grouped = allThreats.groupBy { it.feedName }
-                grouped.forEach { (feedName, entries) ->
-                    item {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(6.dp))
-                                    .background(PrimaryCyan.copy(alpha = 0.1f))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
-                            ) {
-                                Text(feedName, style = MaterialTheme.typography.labelMedium, color = PrimaryCyan, fontWeight = FontWeight.Bold)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                            Text("${entries.size} indicators", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
-                        }
-                    }
-                    items(entries.take(30)) { entry ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 2.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(DarkCard)
-                                .padding(horizontal = 12.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            val (icon, tint) = when (entry.indicatorType) {
-                                "ip" -> Icons.Filled.Router to AccentOrange
-                                else -> Icons.Filled.Language to AccentRed
-                            }
-                            Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(entry.indicator, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, maxLines = 1)
-                                Text(entry.threatType.uppercase(), style = MaterialTheme.typography.labelSmall, color = TextTertiary)
-                            }
-                        }
-                    }
-                    if (entries.size > 30) {
-                        item {
-                            Text(
-                                "  + ${entries.size - 30} more entries",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = TextTertiary,
-                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
-                }
-            }
         }
     }
 }

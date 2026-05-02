@@ -32,17 +32,26 @@ class PermissionAuditorViewModel @Inject constructor(
     val sensorLogs: StateFlow<List<SensorLog>> = sensorLogRepository.observeRecent()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    private val _scannedCount = MutableStateFlow(0)
+    val scannedCount: StateFlow<Int> = _scannedCount.asStateFlow()
+
+    private val _totalCount = MutableStateFlow(0)
+    val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
+
     init {
-        scanPermissions()
+        // Do not auto-scan on init anymore, let user click "Start Full Audit"
     }
 
     fun scanPermissions() {
         if (_isScanning.value) return
 
         _isScanning.value = true
-        viewModelScope.launch(Dispatchers.IO) {
-            val results = scanAppPermissionsUseCase()
-            _scannedApps.value = results
+        viewModelScope.launch {
+            scanAppPermissionsUseCase.invokeProgressive { scanned, total, results ->
+                _scannedCount.value = scanned
+                _totalCount.value = total
+                _scannedApps.value = results
+            }
             _isScanning.value = false
         }
     }

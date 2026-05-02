@@ -8,7 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+ import androidx.compose.foundation.border
+ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -44,6 +45,8 @@ fun PermissionAuditorScreen(
 ) {
     val results by viewModel.scannedApps.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
+    val scannedCount by viewModel.scannedCount.collectAsState()
+    val totalCount by viewModel.totalCount.collectAsState()
     val sensorLogs by viewModel.sensorLogs.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
@@ -112,7 +115,7 @@ fun PermissionAuditorScreen(
         }
 
         when (selectedTab) {
-            0 -> AppPermissionsTab(results, isScanning) { viewModel.scanPermissions() }
+            0 -> AppPermissionsTab(results, isScanning, scannedCount, totalCount) { viewModel.scanPermissions() }
             1 -> HardwareAccessTab(sensorLogs)
         }
     }
@@ -124,26 +127,35 @@ fun PermissionAuditorScreen(
 fun AppPermissionsTab(
     results: List<AppPermissionInfo>,
     isScanning: Boolean,
+    scannedCount: Int,
+    totalCount: Int,
     onScan: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
         // Scan button
         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            val isComplete = !isScanning && results.isNotEmpty()
+            val buttonBg = if (isComplete) Color.Transparent else AccentYellow
+            val buttonContent = if (isComplete) AccentGreen else DarkBackground
+            
             Button(
                 onClick = onScan,
                 modifier = Modifier.fillMaxWidth().height(50.dp),
                 shape = RoundedCornerShape(14.dp),
                 enabled = !isScanning,
+                border = if (isComplete) androidx.compose.foundation.BorderStroke(1.dp, AccentGreen) else null,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentYellow,
-                    contentColor = DarkBackground,
+                    containerColor = buttonBg,
+                    contentColor = buttonContent,
                     disabledContainerColor = DarkSurfaceVariant
                 )
             ) {
                 if (isScanning) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = TextTertiary)
                     Spacer(Modifier.width(12.dp))
-                    Text("Analyzing installed apps...", color = TextTertiary, fontWeight = FontWeight.Bold)
+                    Text("Scanning apps… ($scannedCount / $totalCount)", color = TextTertiary, fontWeight = FontWeight.Bold)
+                } else if (isComplete) {
+                    Text("Audit complete · Tap to re-scan", fontWeight = FontWeight.Bold)
                 } else {
                     Icon(Icons.Filled.Search, null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
@@ -165,20 +177,51 @@ fun AppPermissionsTab(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                val highRisk = results.filter { it.riskLevel.equals("high", ignoreCase = true) }.sortedByDescending { it.riskScore }
-                val mediumRisk = results.filter { it.riskLevel.equals("medium", ignoreCase = true) }.sortedByDescending { it.riskScore }
-
-                if (highRisk.isNotEmpty()) {
-                    item { SectionHeader(title = "High Risk Apps (${highRisk.size})") }
-                    items(highRisk, key = { it.packageName }) { app -> AuditorAppItem(app) }
+                if (results.isNotEmpty()) {
+                    item {
+                        Text("🔴 Red = real-time surveillance risk  ·  ⬜ Gray = data access risk", style = MaterialTheme.typography.labelSmall, color = TextTertiary, modifier = Modifier.padding(bottom = 8.dp))
+                    }
                 }
 
-                if (mediumRisk.isNotEmpty()) {
-                    item { SectionHeader(title = "Medium Risk Apps (${mediumRisk.size})") }
-                    items(mediumRisk, key = { it.packageName }) { app -> AuditorAppItem(app) }
+                val critical = results.filter { it.riskTier == "CRITICAL" }
+                val high     = results.filter { it.riskTier == "HIGH" }
+                val medium   = results.filter { it.riskTier == "MEDIUM" }
+                val low      = results.filter { it.riskTier == "LOW" }
+
+                if (critical.isNotEmpty()) {
+                    item { SectionHeader(title = "Critical Risk Apps (${critical.size})") }
+                    items(critical, key = { it.packageName }) { app -> AuditorAppItem(app) }
                 }
 
-                if (highRisk.isEmpty() && mediumRisk.isEmpty() && results.isNotEmpty()) {
+                if (high.isNotEmpty()) {
+                    item { SectionHeader(title = "High Risk Apps (${high.size})") }
+                    items(high, key = { it.packageName }) { app -> AuditorAppItem(app) }
+                }
+
+                if (medium.isNotEmpty()) {
+                    item { SectionHeader(title = "Medium Risk Apps (${medium.size})") }
+                    items(medium, key = { it.packageName }) { app -> AuditorAppItem(app) }
+                }
+
+                if (low.isNotEmpty()) {
+                    item {
+                        var expanded by remember { mutableStateOf(false) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Show ${low.size} low-risk apps", style = MaterialTheme.typography.bodyMedium, color = TextTertiary, modifier = Modifier.weight(1f))
+                            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = TextTertiary)
+                        }
+                        if (expanded) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                low.forEach { app -> AuditorAppItem(app) }
+                            }
+                        }
+                    }
+                }
+
+                if (results.isNotEmpty() && critical.isEmpty() && high.isEmpty() && medium.isEmpty()) {
                     item {
                         Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
                             Text("No risky apps found. Looking good!", color = AccentGreen, fontWeight = FontWeight.Bold)
@@ -236,11 +279,54 @@ fun HardwareAccessTab(sensorLogs: List<SensorLog>) {
                 Icon(Icons.Filled.Info, null, tint = PrimaryCyan, modifier = Modifier.size(16.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    "Tap any sensor to manage which apps can access it. Revoke buttons open Android's permission settings.",
+                    "Tap any sensor to view apps. The Block / Unblock buttons open Android's permission settings to revoke or grant access.",
                     style = MaterialTheme.typography.bodySmall,
                     color = TextSecondary
                 )
             }
+        }
+
+        // Global System Blocks
+        item {
+            Spacer(Modifier.height(8.dp))
+            Text("Global System Blocks", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
+            
+            // Camera/Mic system toggles (Android 12+) or Privacy Dashboard
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(DarkCard)
+                    .clickable { 
+                        try {
+                            context.startActivity(Intent(Settings.ACTION_PRIVACY_SETTINGS))
+                        } catch (e: Exception) {
+                            context.startActivity(Intent(Settings.ACTION_SETTINGS))
+                        }
+                    }
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                        .background(AccentRed.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Block, null, tint = AccentRed, modifier = Modifier.size(24.dp))
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("System-Wide Sensor Block", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Open Android's global privacy controls to cut off Camera & Mic access for ALL apps instantly.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                }
+                Icon(Icons.Filled.OpenInNew, null, tint = PrimaryCyan, modifier = Modifier.size(20.dp))
+            }
+        }
+        
+        item {
+            Spacer(Modifier.height(16.dp))
+            Text("App-Specific Access", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
         }
 
         // Hardware sensor cards with access log
@@ -413,7 +499,7 @@ fun HardwareSensorCard(sensor: HardwareSensor, logs: List<SensorLog>) {
                                 ) {
                                     Icon(Icons.Filled.Block, null, tint = sensor.accentColor, modifier = Modifier.size(12.dp))
                                     Spacer(Modifier.width(4.dp))
-                                    Text("Revoke ${sensor.name}", style = MaterialTheme.typography.labelSmall, color = sensor.accentColor)
+                                    Text("Block / Unblock", style = MaterialTheme.typography.labelSmall, color = sensor.accentColor)
                                 }
                             }
                         }
@@ -544,8 +630,12 @@ fun SensorLogItem(log: SensorLog) {
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AuditorAppItem(appInfo: AppPermissionInfo) {
-    val isHighRisk = appInfo.riskLevel.equals("high", ignoreCase = true)
-    val accentColor = if (isHighRisk) AccentRed else AccentOrange
+    val accentColor = when (appInfo.riskTier) {
+        "CRITICAL" -> AccentRed
+        "HIGH" -> AccentOrange
+        "MEDIUM" -> AccentYellow
+        else -> TextTertiary
+    }
 
     val context = LocalContext.current
     val appIcon = remember(appInfo.packageName) {
@@ -580,7 +670,7 @@ fun AuditorAppItem(appInfo: AppPermissionInfo) {
                 modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(accentColor.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
-                    if (isHighRisk) "HIGH RISK" else "MODERATE",
+                    appInfo.riskTier,
                     style = MaterialTheme.typography.labelSmall, color = accentColor, fontWeight = FontWeight.Bold
                 )
             }
@@ -596,20 +686,35 @@ fun AuditorAppItem(appInfo: AppPermissionInfo) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             appInfo.dangerousPermissions.forEach { permission ->
                 val permName = permission.substringAfterLast(".")
-                val isVerySensitive = permName in listOf("CAMERA", "RECORD_AUDIO", "ACCESS_FINE_LOCATION", "READ_CONTACTS", "READ_SMS")
+                val isSurveillance = permName in listOf("CAMERA", "RECORD_AUDIO", "ACCESS_FINE_LOCATION", "READ_CONTACTS", "ACCESS_BACKGROUND_LOCATION")
 
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(6.dp))
-                        .background(if (isVerySensitive) AccentRed.copy(alpha = 0.1f) else DarkSurfaceVariant)
-                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                ) {
-                    Text(
-                        permName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isVerySensitive) AccentRed else TextSecondary,
-                        fontWeight = FontWeight.Medium
-                    )
+                if (isSurveillance) {
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(AccentRed)
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            permName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .border(1.dp, TextTertiary, RoundedCornerShape(6.dp))
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            permName,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
                 }
             }
         }
@@ -626,8 +731,8 @@ fun AuditorAppItem(appInfo: AppPermissionInfo) {
             modifier = Modifier.fillMaxWidth().height(42.dp),
             shape = RoundedCornerShape(10.dp),
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isHighRisk) AccentRed.copy(alpha = 0.15f) else PrimaryCyan.copy(alpha = 0.15f),
-                contentColor = if (isHighRisk) AccentRed else PrimaryCyan
+                containerColor = accentColor.copy(alpha = 0.15f),
+                contentColor = accentColor
             )
         ) {
             Icon(Icons.Filled.Settings, "Manage", modifier = Modifier.size(18.dp))

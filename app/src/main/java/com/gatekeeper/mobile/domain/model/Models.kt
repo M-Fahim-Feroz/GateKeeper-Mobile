@@ -11,7 +11,8 @@ data class InstalledApp(
     val icon: android.graphics.drawable.Drawable? = null,
     val isSystemApp: Boolean = false,
     val isBlocked: Boolean = false,
-    val uid: Int = -1
+    val uid: Int = -1,
+    val sensitivePermCount: Int = 0  // count of surveillance-tier permissions
 )
 
 /** Active network connection visible in traffic monitor */
@@ -55,7 +56,7 @@ data class AppPermissionInfo(
     val appName: String,
     val permissions: List<String>,
     val riskScore: Int,         // 0-100
-    val riskLevel: String,      // "low", "medium", "high"
+    val riskTier: String,       // "CRITICAL", "HIGH", "MEDIUM", "LOW"
     val dangerousPermissions: List<String>,
     val icon: android.graphics.drawable.Drawable? = null
 )
@@ -69,5 +70,9 @@ data class WifiNetworkInfo(
     val frequency: Int,
     val isConnected: Boolean = false,
     val securityScore: Int,     // 0-100
-    val riskLevel: String       // "safe", "warning", "danger"
+    val riskLevel: String,      // "safe", "warning", "danger"
+    val signalLevel: Int = 0,   // 0-4 bars
+    val isEvilTwin: Boolean = false,
+    val isSuspicious: Boolean = false,
+    val vendorName: String? = null
 )

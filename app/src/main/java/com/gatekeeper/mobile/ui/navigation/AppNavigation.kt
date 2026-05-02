@@ -21,6 +21,11 @@ import com.gatekeeper.mobile.ui.screens.dashboard.DashboardScreen
 import com.gatekeeper.mobile.ui.screens.dns.DnsFilterScreen
 import com.gatekeeper.mobile.ui.screens.firewall.FirewallScreen
 import com.gatekeeper.mobile.ui.screens.settings.SettingsScreen
+import com.gatekeeper.mobile.ui.screens.settings.SettingsLandingScreen
+import com.gatekeeper.mobile.ui.screens.settings.SettingsProtectionScreen
+import com.gatekeeper.mobile.ui.screens.settings.SettingsPrivacyScreen
+import com.gatekeeper.mobile.ui.screens.settings.SettingsAdvancedScreen
+import com.gatekeeper.mobile.ui.screens.settings.SettingsAboutScreen
 import com.gatekeeper.mobile.ui.screens.traffic.TrafficScreen
 import com.gatekeeper.mobile.ui.screens.threats.ThreatFeedScreen
 import com.gatekeeper.mobile.ui.screens.permissionauditor.PermissionAuditorScreen
@@ -160,7 +165,11 @@ fun AppNavigation(
             composable(Screen.DnsFilter.route) { DnsFilterScreen() }
             composable(Screen.Traffic.route) { TrafficScreen() }
             composable(Screen.AiChat.route) { AiChatScreen() }
-            composable(Screen.Settings.route) { SettingsScreen(navController = navController) }
+            composable(Screen.Settings.route) { SettingsLandingScreen(navController = navController) }
+            composable("settings/protection") { SettingsProtectionScreen(navController = navController) }
+            composable("settings/privacy") { SettingsPrivacyScreen(navController = navController) }
+            composable("settings/advanced") { SettingsAdvancedScreen(navController = navController) }
+            composable("settings/about") { SettingsAboutScreen(navController = navController) }
             composable(Screen.ThreatFeed.route) { ThreatFeedScreen(navController = navController) }
             composable(Screen.PermissionAuditor.route) { PermissionAuditorScreen(navController = navController) }
             composable(Screen.WifiScanner.route) { WifiScannerScreen(navController = navController) }

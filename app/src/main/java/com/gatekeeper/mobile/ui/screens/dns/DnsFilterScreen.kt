@@ -184,15 +184,51 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
             } else {
                 if (currentList.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(Icons.Filled.FilterListOff, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.padding(32.dp)
+                        ) {
+                            Icon(Icons.Filled.Dns, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
                             Spacer(Modifier.height(12.dp))
                             Text(
-                                if (selectedTab == 0) "No domains blocked yet" else "No domains allowed yet",
-                                color = TextSecondary, style = MaterialTheme.typography.bodyMedium
+                                "No rules yet",
+                                color = TextPrimary, style = MaterialTheme.typography.titleMedium,
+                                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                             )
                             Spacer(Modifier.height(6.dp))
-                            Text("Tap + to add one", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                if (selectedTab == 0)
+                                    "Block ads, trackers, or malicious domains at the DNS level"
+                                else
+                                    "Allow trusted domains to bypass all DNS filters",
+                                color = TextSecondary,
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                            )
+                            if (selectedTab == 0) {
+                                Spacer(Modifier.height(16.dp))
+                                Button(
+                                    onClick = { selectedTab = 2 },
+                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryCyan.copy(alpha = 0.15f), contentColor = PrimaryCyan)
+                                ) {
+                                    Text("Browse curated lists")
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                OutlinedButton(
+                                    onClick = { showAddDialog = true },
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                                ) {
+                                    Text("Add domain manually", color = TextSecondary)
+                                }
+                            } else {
+                                Spacer(Modifier.height(16.dp))
+                                Button(
+                                    onClick = { showAddDialog = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen.copy(alpha = 0.15f), contentColor = AccentGreen)
+                                ) {
+                                    Text("Allow a domain")
+                                }
+                            }
                         }
                     }
                 } else {
