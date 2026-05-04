@@ -41,6 +41,10 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
         }
     }
 
+    LaunchedEffect(Unit) {
+        viewModel.checkServerHealth()
+    }
+
     Column(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
         // App Bar / Header
         Column(
@@ -95,6 +99,9 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
                         style = MaterialTheme.typography.bodySmall,
                         color = TextSecondary
                     )
+                }
+                TextButton(onClick = { viewModel.checkServerHealth() }) {
+                    Text("Retry", color = AccentOrange, fontWeight = FontWeight.Bold)
                 }
             }
         }

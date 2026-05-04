@@ -26,6 +26,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -79,7 +82,7 @@ fun DashboardScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(Color.Transparent)
             .verticalScroll(rememberScrollState())
     ) {
         // ── Hero Banner ──────────────────────────────────────────────────────
@@ -89,7 +92,7 @@ fun DashboardScreen(
                 .background(Brush.verticalGradient(
                     colors = listOf(
                         if (isVpnActive) PrimaryCyan.copy(alpha = 0.08f) else AccentRed.copy(alpha = 0.06f),
-                        DarkBackground
+                        Color.Transparent
                     )
                 ))
                 .padding(horizontal = 20.dp)
@@ -98,9 +101,19 @@ fun DashboardScreen(
             Column(modifier = Modifier.fillMaxWidth()) {
                 // Top bar
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column {
-                        Text("GateKeeper", style = MaterialTheme.typography.displayMedium, color = TextPrimary)
-                        Text("Mobile Security Suite", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Image(
+                            painter = painterResource(
+                                id = if (isSystemInDarkTheme()) com.gatekeeper.mobile.R.drawable.gk_logo_dark else com.gatekeeper.mobile.R.drawable.gk_logo_light
+                            ),
+                            contentDescription = "GateKeeper Logo",
+                            modifier = Modifier.size(48.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text("GateKeeper", style = MaterialTheme.typography.displayMedium, color = TextPrimary)
+                            Text("Mobile Security Suite", style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                        }
                     }
                     IconButton(onClick = { navController.navigate("settings") }) {
                         Icon(Icons.Filled.Settings, "Settings", tint = TextSecondary)
@@ -371,9 +384,7 @@ fun ThreatAlertBanner(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(DarkCard)
-            .border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(12.dp))
+            .glassCard(shape = RoundedCornerShape(12.dp))
             .let { if (onClick != null) it.clickable(onClick = onClick) else it }
             .padding(16.dp),
         verticalAlignment = Alignment.Top
@@ -466,9 +477,7 @@ fun VpnHeroCard(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
-            .background(bgBrush)
-            .border(1.dp, if (isActive) StatusOnline.copy(alpha = 0.3f) else BorderDefault, RoundedCornerShape(20.dp))
+            .glassCard(shape = RoundedCornerShape(20.dp))
             .padding(20.dp)
     ) {
         Row(
@@ -546,11 +555,10 @@ fun QuickActionCard(
     val shape = RoundedCornerShape(16.dp)
     Card(
         onClick = onClick, modifier = modifier.fillMaxWidth(), shape = shape,
-        colors = CardDefaults.cardColors(containerColor = DarkCard),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Brush.horizontalGradient(gradientColors.map { it.copy(alpha = 0.2f) }))
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
     ) {
         Column(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier.fillMaxWidth().glassCard(shape = RoundedCornerShape(16.dp)).padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.Center
         ) {
             Box(

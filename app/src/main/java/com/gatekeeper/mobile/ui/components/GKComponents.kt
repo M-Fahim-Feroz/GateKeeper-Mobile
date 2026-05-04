@@ -31,9 +31,7 @@ fun GKListRow(
     var modifier = Modifier
         .fillMaxWidth()
         .defaultMinSize(minHeight = 70.dp)
-        .clip(RoundedCornerShape(12.dp))
-        .background(DarkCard)
-        .border(0.5.dp, BorderDefault, RoundedCornerShape(12.dp))
+        .glassCard(shape = RoundedCornerShape(12.dp))
     
     if (onClick != null) {
         modifier = modifier.clickable(onClick = onClick)

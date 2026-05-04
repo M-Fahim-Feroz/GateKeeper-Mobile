@@ -69,7 +69,7 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
             modifier = Modifier
                 .fillMaxSize()
                 .background(DarkBackground)
-                .padding(paddingValues)
+                .padding(bottom = paddingValues.calculateBottomPadding())
         ) {
             // Header
             Column(

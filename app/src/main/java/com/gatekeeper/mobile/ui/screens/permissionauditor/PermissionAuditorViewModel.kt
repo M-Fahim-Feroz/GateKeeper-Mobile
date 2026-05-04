@@ -39,7 +39,7 @@ class PermissionAuditorViewModel @Inject constructor(
     val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
 
     init {
-        // Do not auto-scan on init anymore, let user click "Start Full Audit"
+        scanPermissions()
     }
 
     fun scanPermissions() {

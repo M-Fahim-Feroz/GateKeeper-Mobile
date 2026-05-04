@@ -27,7 +27,8 @@ class PrivacyAccessLogger @Inject constructor(
 
     private val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
     private val pm = context.packageManager
-    private val activeSessions = ConcurrentHashMap<String, Long>() // Key: "$packageName|$opName", Value: logId
+    // Key: "$packageName|$opName", Value: Pair(logId, startTime)
+    private val activeSessions = ConcurrentHashMap<String, Pair<Long, Long>>()
 
     private val scope = CoroutineScope(Dispatchers.IO)
 
@@ -78,7 +79,7 @@ class PrivacyAccessLogger @Inject constructor(
             val isBackground = processInfo?.importance != android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
 
             val logId = sensorLogRepository.logAccessStart(packageName, appName, sensorType, isBackground)
-            activeSessions[sessionKey] = logId
+            activeSessions[sessionKey] = Pair(logId, System.currentTimeMillis())
             Log.d(TAG, "Access started: $appName -> $sensorType")
 
             if (isBackground) {
@@ -91,12 +92,13 @@ class PrivacyAccessLogger @Inject constructor(
 
         } else {
             // Stopped using sensor
-            val logId = activeSessions.remove(sessionKey)
-            if (logId != null) {
-                // In a perfect world, we'd query the start time and calculate duration.
-                // Here we just mark an end time (simplified duration update).
-                sensorLogRepository.logAccessEnd(logId, 1000) // stub 1 second duration
-                Log.d(TAG, "Access ended: $packageName -> $sensorType")
+            val session = activeSessions.remove(sessionKey)
+            if (session != null) {
+                val logId = session.first
+                val startTime = session.second
+                val durationMs = System.currentTimeMillis() - startTime
+                sensorLogRepository.logAccessEnd(logId, durationMs)
+                Log.d(TAG, "Access ended: $packageName -> $sensorType (Duration: ${durationMs}ms)")
             }
         }
     }

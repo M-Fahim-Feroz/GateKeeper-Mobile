@@ -132,35 +132,26 @@ fun AppPermissionsTab(
     onScan: () -> Unit
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        // Scan button
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
-            val isComplete = !isScanning && results.isNotEmpty()
-            val buttonBg = if (isComplete) Color.Transparent else AccentYellow
-            val buttonContent = if (isComplete) AccentGreen else DarkBackground
-            
-            Button(
-                onClick = onScan,
-                modifier = Modifier.fillMaxWidth().height(50.dp),
-                shape = RoundedCornerShape(14.dp),
-                enabled = !isScanning,
-                border = if (isComplete) androidx.compose.foundation.BorderStroke(1.dp, AccentGreen) else null,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = buttonBg,
-                    contentColor = buttonContent,
-                    disabledContainerColor = DarkSurfaceVariant
-                )
+        LaunchedEffect(Unit) {
+            if (results.isEmpty() && !isScanning) {
+                onScan()
+            }
+        }
+        
+        // Scan progress indicator
+        if (isScanning) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(DarkSurfaceVariant)
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isScanning) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = TextTertiary)
-                    Spacer(Modifier.width(12.dp))
-                    Text("Scanning apps… ($scannedCount / $totalCount)", color = TextTertiary, fontWeight = FontWeight.Bold)
-                } else if (isComplete) {
-                    Text("Audit complete · Tap to re-scan", fontWeight = FontWeight.Bold)
-                } else {
-                    Icon(Icons.Filled.Search, null, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Start Full Audit", fontWeight = FontWeight.Bold)
-                }
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = PrimaryCyan)
+                Spacer(Modifier.width(16.dp))
+                Text("Auditing apps… ($scannedCount / $totalCount)", color = TextPrimary, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -268,22 +259,42 @@ fun HardwareAccessTab(sensorLogs: List<SensorLog>) {
     ) {
         // Quick info banner
         item {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(PrimaryCyan.copy(alpha = 0.08f))
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(12.dp)
             ) {
-                Icon(Icons.Filled.Info, null, tint = PrimaryCyan, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "Tap any sensor to view apps. The Block / Unblock buttons open Android's permission settings to revoke or grant access.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Info, null, tint = PrimaryCyan, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Tap any sensor to view apps. The Block / Unblock buttons open Android's permission settings to revoke or grant access.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.SecurityUpdateWarning, null, tint = AccentYellow, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "To monitor OTHER apps' hardware usage, you must grant ADB permission:\nadb shell pm grant com.gatekeeper.mobile android.permission.WATCH_APPOPS",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = AccentYellow
+                    )
+                }
             }
+        }
+
+        // Privacy Dashboard Donut Chart
+        item {
+            Spacer(Modifier.height(16.dp))
+            Text("Privacy Dashboard", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            PrivacyDashboardChart(sensorLogs)
+            Spacer(Modifier.height(8.dp))
         }
 
         // Global System Blocks

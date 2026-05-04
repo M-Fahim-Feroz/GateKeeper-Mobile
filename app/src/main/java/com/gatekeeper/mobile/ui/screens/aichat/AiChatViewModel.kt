@@ -13,13 +13,17 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import android.content.Context
+import android.content.pm.PackageManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 
 @HiltViewModel
 class AiChatViewModel @Inject constructor(
     private val chatRepository: AiChatRepository,
     private val firewallRepository: FirewallRepository,
     private val dnsRepository: DnsRepository,
-    private val ipRuleDao: IpRuleDao
+    private val ipRuleDao: IpRuleDao,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(
@@ -79,10 +83,25 @@ class AiChatViewModel @Inject constructor(
         }
     }
 
-    private fun checkServerHealth() {
+    fun checkServerHealth() {
         viewModelScope.launch {
             _isServerOnline.value = chatRepository.checkHealth()
         }
+    }
+
+    private fun resolvePackageName(appName: String): String {
+        if (appName.contains(".")) return appName
+        try {
+            val pm = context.packageManager
+            val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            for (appInfo in packages) {
+                val label = pm.getApplicationLabel(appInfo).toString()
+                if (label.equals(appName, ignoreCase = true)) {
+                    return appInfo.packageName
+                }
+            }
+        } catch (e: Exception) { e.printStackTrace() }
+        return appName
     }
 
     private fun executeLocalOperations(operations: List<Map<String, Any>>?) {
@@ -97,11 +116,17 @@ class AiChatViewModel @Inject constructor(
                     when (operationName) {
                         "block_process" -> {
                             val target = payloadMap["process_name"] as? String ?: payloadMap["path"] as? String
-                            if (target != null) firewallRepository.toggleBlock(target, target, true)
+                            if (target != null) {
+                                val pkgName = resolvePackageName(target)
+                                firewallRepository.toggleBlock(pkgName, target, true)
+                            }
                         }
                         "unblock_process" -> {
                             val target = payloadMap["process_name"] as? String ?: payloadMap["path"] as? String
-                            if (target != null) firewallRepository.toggleBlock(target, target, false)
+                            if (target != null) {
+                                val pkgName = resolvePackageName(target)
+                                firewallRepository.toggleBlock(pkgName, target, false)
+                            }
                         }
                         "block_website" -> {
                             val domain = payloadMap["domain"] as? String
