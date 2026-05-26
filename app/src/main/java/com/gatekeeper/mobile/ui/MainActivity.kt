@@ -13,7 +13,14 @@ import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 
 import android.content.Intent
+import android.net.VpnService
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
+import com.gatekeeper.mobile.vpn.GateKeeperVpnService
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -23,11 +30,35 @@ class MainActivity : ComponentActivity() {
 
     private val _deepLinkRoute = MutableStateFlow<String?>(null)
 
+    // Launcher for VPN permission dialog
+    private val vpnPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        // User granted VPN permission — now start it
+        startVpnService()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
         _deepLinkRoute.value = intent.getStringExtra("target_route")
+
+        // Auto-start VPN once onboarding is complete and auto-start preference is on
+        lifecycleScope.launch {
+            val onboardingDone = settingsRepository.onboardingDoneFlow.first()
+            val autoStart = settingsRepository.autoVpnStartFlow.first()
+            val vpnAlreadyRunning = GateKeeperVpnService.isRunning.value
+
+            if (onboardingDone && autoStart && !vpnAlreadyRunning) {
+                val prepareIntent = VpnService.prepare(this@MainActivity)
+                if (prepareIntent != null) {
+                    vpnPermissionLauncher.launch(prepareIntent)
+                } else {
+                    startVpnService()
+                }
+            }
+        }
 
         setContent {
             val onboardingDone by settingsRepository.onboardingDoneFlow.collectAsState(initial = false)
@@ -41,6 +72,13 @@ class MainActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    private fun startVpnService() {
+        val intent = Intent(this, GateKeeperVpnService::class.java).apply {
+            action = GateKeeperVpnService.ACTION_START
+        }
+        startForegroundService(intent)
     }
 
     override fun onNewIntent(intent: Intent) {

@@ -44,7 +44,10 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
     val blockedCount = remember(connections) { connections.count { it.wasBlocked && !it.isSystemEvent } }
     val allowedCount = remember(connections) { connections.count { !it.wasBlocked && !it.isSystemEvent } }
 
+    val bandwidthUsage by viewModel.bandwidthUsage.collectAsState(initial = emptyMap())
+
     var selectedLog by remember { mutableStateOf<ConnectionLog?>(null) }
+    var selectedTab by remember { mutableStateOf(0) } // 0 = Connections, 1 = Data Usage
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
     Column(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
@@ -126,80 +129,146 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                 selected = timeRange,
                 onSelect = { viewModel.setTimeRange(it) }
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
 
-            // Status filter
-            GKFilterChips(
-                options = listOf("All", "Blocked", "Allowed", "System"),
-                selected = filterMode,
-                onSelect = { viewModel.setFilterMode(it) }
-            )
-        }
-
-        // ── Legend ────────────────────────────────────────────────────────
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(DarkSurface)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(AccentRed))
-                Spacer(Modifier.width(4.dp))
-                Text("Blocked by firewall/DNS", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(AccentGreen))
-                Spacer(Modifier.width(4.dp))
-                Text("Allowed", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(8.dp).clip(CircleShape).background(PrimaryCyan))
-                Spacer(Modifier.width(4.dp))
-                Text("System", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
-            }
-        }
-
-        // ── Connection List ───────────────────────────────────────────────
-        if (connections.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-                    Icon(Icons.Outlined.CloudOff, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
-                    Spacer(Modifier.height(12.dp))
-                    Text("No connections recorded", color = TextSecondary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        when (filterMode) {
-                            "Blocked" -> "No blocked connections in the last $timeRange.\nAll traffic passed through the VPN cleanly."
-                            "Allowed" -> "No allowed connections in the last $timeRange."
-                            "System" -> "No VPN state change events recorded."
-                            else -> "Enable the VPN to start monitoring network traffic."
-                        },
-                        color = TextTertiary,
-                        style = MaterialTheme.typography.bodySmall,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            // Mode toggle chips
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = selectedTab == 0,
+                    onClick = { selectedTab = 0 },
+                    label = { Text("Connections") },
+                    leadingIcon = { @Suppress("DEPRECATION") Icon(Icons.Filled.List, null, modifier = Modifier.size(16.dp)) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = PrimaryCyan.copy(alpha = 0.15f),
+                        selectedLabelColor = PrimaryCyan
                     )
+                )
+                FilterChip(
+                    selected = selectedTab == 1,
+                    onClick = { selectedTab = 1 },
+                    label = { Text("Data Usage") },
+                    leadingIcon = { Icon(Icons.Filled.DataUsage, null, modifier = Modifier.size(16.dp)) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AccentOrange.copy(alpha = 0.15f),
+                        selectedLabelColor = AccentOrange
+                    )
+                )
+            }
+            
+            if (selectedTab == 0) {
+                Spacer(Modifier.height(12.dp))
+                // Status filter (only for connections tab)
+                GKFilterChips(
+                    options = listOf("All", "Blocked", "Allowed", "System"),
+                    selected = filterMode,
+                    onSelect = { viewModel.setFilterMode(it) }
+                )
+            }
+        }
+
+        if (selectedTab == 0) {
+            // ── Legend ────────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(DarkSurface)
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(AccentRed))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Blocked by firewall/DNS", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(AccentGreen))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Allowed", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(PrimaryCyan))
+                    Spacer(Modifier.width(4.dp))
+                    Text("System", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                }
+            }
+
+            // ── Connection List ───────────────────────────────────────────────
+            if (connections.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                        Icon(Icons.Outlined.CloudOff, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text("No connections recorded", color = TextSecondary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            when (filterMode) {
+                                "Blocked" -> "No blocked connections in the last $timeRange.\nAll traffic passed through the VPN cleanly."
+                                "Allowed" -> "No allowed connections in the last $timeRange."
+                                "System" -> "No VPN state change events recorded."
+                                else -> "Enable the VPN to start monitoring network traffic."
+                            },
+                            color = TextTertiary,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    item {
+                        Text(
+                            "${connections.size} connection${if (connections.size != 1) "s" else ""} · $timeRange",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextTertiary,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+                    items(connections, key = { "${it.timestamp}_${it.id}_${it.packageName}" }) { log ->
+                        ConnectionLogItem(log, onClick = { selectedLog = log })
+                    }
+                    item { Spacer(Modifier.height(80.dp)) }
                 }
             }
         } else {
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                item {
-                    Text(
-                        "${connections.size} connection${if (connections.size != 1) "s" else ""} · $timeRange",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextTertiary,
-                        modifier = Modifier.padding(bottom = 6.dp)
-                    )
+            // ── Data Usage View ──────────────────────────────────────────────
+            val usageList = bandwidthUsage.values.sortedByDescending { it.bytesIn + it.bytesOut }
+            if (usageList.isEmpty()) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
+                        Icon(Icons.Outlined.DataUsage, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
+                        Spacer(Modifier.height(12.dp))
+                        Text("No data usage recorded", color = TextSecondary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            "Enable the VPN and use your apps to see real-time bandwidth usage statistics.",
+                            color = TextTertiary,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
                 }
-                items(connections, key = { "${it.timestamp}_${it.id}_${it.packageName}" }) { log ->
-                    ConnectionLogItem(log, onClick = { selectedLog = log })
+            } else {
+                LazyColumn(
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        Text(
+                            "Real-time bandwidth since VPN started",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextTertiary,
+                            modifier = Modifier.padding(bottom = 6.dp)
+                        )
+                    }
+                    items(usageList, key = { it.packageName }) { usage ->
+                        DataUsageItem(usage)
+                    }
+                    item { Spacer(Modifier.height(80.dp)) }
                 }
-                item { Spacer(Modifier.height(80.dp)) }
             }
         }
     }
@@ -255,7 +324,7 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                 }
 
                 Spacer(Modifier.height(20.dp))
-                Divider(color = BorderDefault)
+                HorizontalDivider(color = BorderDefault)
                 Spacer(Modifier.height(16.dp))
 
                 if (log.isSystemEvent) {
@@ -432,5 +501,78 @@ fun ConnectionLogItem(log: ConnectionLog, onClick: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun DataUsageItem(usage: com.gatekeeper.mobile.vpn.AppBandwidth) {
+    val context = LocalContext.current
+    val pm = context.packageManager
+    var appName by remember { mutableStateOf(usage.packageName) }
+    var appIcon by remember { mutableStateOf<android.graphics.drawable.Drawable?>(null) }
+
+    LaunchedEffect(usage.packageName) {
+        try {
+            val appInfo = pm.getApplicationInfo(usage.packageName, 0)
+            appName = pm.getApplicationLabel(appInfo).toString()
+            appIcon = pm.getApplicationIcon(appInfo)
+        } catch (e: Exception) {
+            // keep package name
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(DarkCard)
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // App icon
+        Box(
+            modifier = Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
+                .background(AccentOrange.copy(alpha = 0.10f)),
+            contentAlignment = Alignment.Center
+        ) {
+            if (appIcon != null) {
+                coil.compose.AsyncImage(model = appIcon, contentDescription = appName, modifier = Modifier.size(28.dp))
+            } else {
+                Icon(Icons.Filled.Apps, null, tint = AccentOrange, modifier = Modifier.size(24.dp))
+            }
+        }
+
+        Spacer(Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                appName,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 1
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.ArrowDownward, null, tint = AccentGreen, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(formatBytes(usage.bytesIn), color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                
+                Spacer(Modifier.width(12.dp))
+                
+                Icon(Icons.Filled.ArrowUpward, null, tint = PrimaryCyan, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text(formatBytes(usage.bytesOut), color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+
+        // Total
+        val total = usage.bytesIn + usage.bytesOut
+        Text(
+            formatBytes(total),
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = AccentOrange
+        )
     }
 }

@@ -82,6 +82,9 @@ class GateKeeperVpnService : VpnService() {
     @Inject
     lateinit var notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 
+    @Inject
+    lateinit var bandwidthMonitor: com.gatekeeper.mobile.vpn.BandwidthMonitor
+
     private var vpnInterface: ParcelFileDescriptor? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var packetLoopJob: Job? = null
@@ -90,6 +93,8 @@ class GateKeeperVpnService : VpnService() {
     // Packet processing components
     private var packetFilter: PacketFilter? = null
     private var dnsResolver: DnsResolver? = null
+    private var udpRelayHandler: com.gatekeeper.mobile.vpn.relay.UdpRelayHandler? = null
+    private var tcpRelayHandler: com.gatekeeper.mobile.vpn.relay.TcpRelayHandler? = null
 
     // F18: PCAP Recording State
     private var isPcapRecording = false
@@ -134,10 +139,7 @@ class GateKeeperVpnService : VpnService() {
 
     private fun startVpn() {
         Log.i(TAG, "Starting VPN...")
-        _isRunning.value = true
-
-        // Load DNS blocklists into memory immediately
-        dnsBlocklistManager.loadFromDatabase()
+        _isConnecting.value = true
 
         // 2F: Prune PCAP files older than 24h on every VPN start
         PcapWriter.pruneStaleFiles(this)
@@ -145,6 +147,8 @@ class GateKeeperVpnService : VpnService() {
         // Initialize packet processing pipeline
         packetFilter = PacketFilter()
         dnsResolver = DnsResolver(this, dnsBlocklistManager)
+        udpRelayHandler = com.gatekeeper.mobile.vpn.relay.UdpRelayHandler(this)
+        tcpRelayHandler = com.gatekeeper.mobile.vpn.relay.TcpRelayHandler(this, dnsBlocklistManager)
 
         // Start Sensor Logging
         privacyAccessLogger.start()
@@ -154,6 +158,14 @@ class GateKeeperVpnService : VpnService() {
 
         // Start foreground notification
         startForeground(NOTIFICATION_ID, createNotification())
+
+        serviceScope.launch {
+            // ★ CRITICAL: Await blocklist load BEFORE establishing VPN.
+            // Without this, the in-memory blocked-domain set is empty when the first
+            // DNS query arrives, so nothing gets sinkholed on fresh VPN start.
+            dnsBlocklistManager.awaitInitialLoad()
+            Log.i(TAG, "DNS blocklists loaded. Starting VPN tunnel.")
+        }
 
         // Observe firewall rules (app blocking)
         serviceScope.launch {
@@ -172,7 +184,7 @@ class GateKeeperVpnService : VpnService() {
             }
         }
 
-        // F8: Observe screen-off block rules (per-app, user selected)
+        // F8: Observe screen-off block rules (per-app, user selected) & Feature 4C (Time Schedules)
         serviceScope.launch {
             firewallRuleDao.observeAll().collect { rules ->
                 val screenOffPackages = rules.filter { it.blockWhenScreenOff }.map { it.packageName }
@@ -181,13 +193,23 @@ class GateKeeperVpnService : VpnService() {
                 }.toSet()
                 packetFilter?.updateScreenOffBlockedUids(screenOffUids)
                 Log.d(TAG, "Screen-off block list updated: ${screenOffPackages.size} apps")
+
+                // Extract scheduled rules
+                val scheduledUids = mutableMapOf<Int, com.gatekeeper.mobile.vpn.PacketFilter.Schedule>()
+                rules.filter { it.blockScheduleEnabled }.forEach { rule ->
+                    try {
+                        val uid = packageManager.getPackageUid(rule.packageName, 0)
+                        scheduledUids[uid] = com.gatekeeper.mobile.vpn.PacketFilter.Schedule(rule.blockStartMinutes, rule.blockEndMinutes)
+                    } catch (e: Exception) {
+                        // Package not found
+                    }
+                }
+                packetFilter?.updateScheduledBlockedUids(scheduledUids)
+                Log.d(TAG, "Time-based block list updated: ${scheduledUids.size} apps")
             }
         }
 
-        // *** CRITICAL FIX: Observe DNS blacklist changes LIVE ***
-        // When a user adds/removes a domain in the DNS screen while VPN is running,
-        // this collector immediately pushes the update into DnsBlocklistManager's
-        // in-memory set — no VPN restart needed.
+        // CRITICAL: Observe DNS blacklist changes LIVE
         serviceScope.launch {
             dnsBlocklistManager.observeAndSync()
         }
@@ -238,6 +260,14 @@ class GateKeeperVpnService : VpnService() {
             }
         }
         
+        // Feature 4D: Observe SafeSearch state
+        serviceScope.launch {
+            settingsRepository.safeSearchEnabledFlow.collect { enabled ->
+                dnsBlocklistManager.isSafeSearchEnabled = enabled
+                Log.i(TAG, "SafeSearch state updated: $enabled")
+            }
+        }
+        
         // Start periodic traffic reporting
         startReportingLoop()
     }
@@ -254,6 +284,10 @@ class GateKeeperVpnService : VpnService() {
                 for (conn in connections) {
                     // Only log if there was data transfer
                     if (conn.bytesIn > 0 || conn.bytesOut > 0) {
+                        
+                        // Feature 4B: Real-time Bandwidth Monitor
+                        bandwidthMonitor.addTraffic(conn.packageName, conn.bytesIn, conn.bytesOut)
+
                         trafficLogger.log(
                             packageName = conn.packageName,
                             appName = conn.appName,
@@ -280,109 +314,91 @@ class GateKeeperVpnService : VpnService() {
     }
 
     private fun rebuildVpnInterface(blockedPackages: List<String>) {
-        // CORRECT ARCHITECTURE: Single always-on DNS-intercept split-tunnel.
+        // ══════════════════════════════════════════════════════════════════════
+        // ARCHITECTURE: Hybrid Per-App Firewall
         //
-        // How it works:
-        //   1. We tell Android: "Use 10.120.0.2 as the DNS server" (our fake TUN address)
-        //   2. We add a single /32 route for that IP, so ONLY DNS queries enter our TUN
-        //   3. All HTTPS/TCP/UDP for ALL apps bypasses the TUN completely, running at native speed
-        //   4. When a DNS query arrives in our TUN, we check the querying app's UID
-        //   5. If the UID is for a blocked app → DNS Sinkhole (return 0.0.0.0) → app can't connect
-        //   6. If not blocked → forward query to 8.8.8.8, return real IP → app works normally
+        // Android VPN API: addAllowedApplication(pkg) → ONLY those apps' traffic
+        // enters the VPN tunnel. All other apps bypass the VPN and use normal internet.
         //
-        // This is exactly how NetGuard and Blokada implement per-app blocking on non-rooted devices.
-        
-        val builder = Builder()
-            .setSession("GateKeeper")
-            .addAddress(VPN_DEVICE_ADDRESS, VPN_PREFIX_LENGTH)
-            .addAddress(VPN_DEVICE_ADDRESS_V6, 128)
-            .allowBypass() // CRITICAL: Allows non-VPN apps to use normal internet!
-            .setBlocking(true)
-            .setMtu(VPN_MTU)
+        // Strategy:
+        //   IF apps are blocked:
+        //     • addAllowedApplication(blockedApp) for each blocked app
+        //     • Route ALL traffic through tunnel (0.0.0.0/0)
+        //     • PacketFilter DROPS everything from blocked UIDs (TCP, UDP, QUIC)
+        //     • Non-blocked apps BYPASS VPN → full-speed internet, no relay
+        //     → WhatsApp blocked = ALL its sockets die immediately ✅
+        //
+        //   ALWAYS:
+        //     • addAllowedApplication(GateKeeper) EXCLUDED (we never enter our own tunnel)
+        //     • DNS server set to our interceptor for domain blocking
+        // ══════════════════════════════════════════════════════════════════════
 
         serviceScope.launch {
             try {
-                // Update the UID-based packet filter for dropping
                 val blockedUids = blockedPackages.mapNotNull { pkg ->
                     try { packageManager.getPackageUid(pkg, 0) } catch (e: Exception) { null }
                 }.toSet()
                 packetFilter?.updateBlockedUids(blockedUids)
 
+                val builder = Builder()
+                    .setSession("GateKeeper")
+                    .addAddress(VPN_DEVICE_ADDRESS, VPN_PREFIX_LENGTH)
+                    .addAddress(VPN_DEVICE_ADDRESS_V6, 128)
+                    .setBlocking(true)
+                    .setMtu(VPN_MTU)
+
                 if (blockedPackages.isNotEmpty()) {
-                    // ==========================================
-                    // MODE: STRICT LOCKDOWN APP FIREWALL
-                    // ==========================================
-                    // When an app is blocked, we MUST force its ENTIRE network traffic (TCP, UDP, ICMP) 
-                    // into the VPN and drop it. This defeats hardcoded IP bypasses (like WhatsApp).
-                    // Limitation: Because Android VpnService does not support per-app routing rules, 
-                    // using addAllowedApplication() means unblocked apps will bypass the VPN entirely,
-                    // which means the Global DNS Filter will pause for unblocked apps while the Firewall is active.
-                    Log.i(TAG, "VPN Mode: App Firewall (Strict Lockdown) for ${blockedPackages.size} apps")
-                    
+                    // ── MODE A: Per-App Blocking ──────────────────────────────
+                    // ONLY blocked apps enter the tunnel. All other apps use real internet.
                     builder.addRoute("0.0.0.0", 0)
                     builder.addRoute("::", 0)
-                    blockedPackages.forEach { builder.addAllowedApplication(it) }
-                    
-                } else {
-                    // ==========================================
-                    // MODE: GLOBAL DNS FILTER (Split-Tunnel)
-                    // ==========================================
-                    // When no apps are blocked, we run a phone-wide DNS interceptor.
-                    
-                    Log.i(TAG, "VPN Mode: Unified DNS Filter")
-                    
                     builder.addDnsServer(VPN_DNS_ADDRESS)
-                    builder.addRoute(VPN_DNS_ADDRESS, 32)
-                    
-                    // Add an IPv6 DNS server to prevent Android from bypassing our IPv4 DNS
                     builder.addDnsServer("fd00:1:fd00:1:fd00:1:fd00:2")
-                    builder.addRoute("fd00:1:fd00:1:fd00:1:fd00:2", 128)
 
-                    builder.addDisallowedApplication(packageName)
-
-                    // Inject custom user blocked IPs & threat feeds
-                    val customBlockedIps = ipRuleDao.getBlockedIps()
-                    val threatIps = threatFeedRepository.getThreatIps()
-                    (customBlockedIps + threatIps).toSet().forEach { ipString ->
+                    blockedPackages.forEach { pkg ->
                         try {
-                            val ip = InetAddress.getByName(ipString)
-                            val bits = if (ip is Inet4Address) 32 else 128
-                            builder.addRoute(ip, bits)
-                        } catch (e: Exception) {}
+                            builder.addAllowedApplication(pkg)
+                            Log.i(TAG, "Blocking app in tunnel: $pkg")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Could not restrict $pkg: ${e.message}")
+                        }
                     }
-
-                    // Hijack Chrome/Android Secure DNS (DoH) over both IPv4 and IPv6
-                    val secureDnsIps = listOf(
-                        "8.8.8.8", "8.8.4.4", "1.1.1.1", "1.0.0.1", "9.9.9.9", "149.112.112.112",
-                        "2001:4860:4860::8888", "2001:4860:4860::8844", // Google IPv6
-                        "2606:4700:4700::1111", "2606:4700:4700::1001", // Cloudflare IPv6
-                        "2620:fe::fe" // Quad9 IPv6
-                    )
-                    secureDnsIps.forEach { ipString ->
-                        try {
-                            val ip = InetAddress.getByName(ipString)
-                            val bits = if (ip is Inet4Address) 32 else 128
-                            builder.addRoute(ip, bits)
-                        } catch (e: Exception) {}
-                    }
+                    Log.i(TAG, "VPN Mode: Per-App Block — ${blockedPackages.size} app(s) fully blocked")
+                } else {
+                    // ── MODE B: DNS-Intercept Split-Tunnel (no apps blocked) ──
+                    //
+                    // To make domain blocking work for all apps, we MUST intercept DNS.
+                    // We allow all regular TCP/UDP traffic to bypass the VPN natively.
+                    //
+                    // CRITICAL FIX FOR LINKEDIN/BANKING APPS:
+                    // We DO NOT add an IPv6 DNS server (fd00...). We ONLY add IPv4.
+                    // Android will send ONLY IPv4 DNS queries to our TUN. This prevents
+                    // our DnsResolver from receiving IPv6 queries, which it corrupts.
+                    // Furthermore, TCP port 53 is now dropped natively by PacketFilter,
+                    // so if an app tries TCP DNS it will fallback to UDP instantly.
+                    builder.allowBypass()
+                    builder.addRoute(VPN_DNS_ADDRESS, 32)
+                    builder.addDnsServer(VPN_DNS_ADDRESS)
+                    // Explicitly NO IPv6 route and NO IPv6 addDnsServer
+                    Log.i(TAG, "VPN Mode: DNS-Intercept Split-Tunnel (Domain Block Active)")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error configuring VPN routing", e)
-            }
 
-            val oldInterface = vpnInterface
-            try {
-                // 1E: VPN Reconnect Hold to prevent traffic leaks during rule updates
-                trafficRepository.insertSystemEvent("VPN reconnecting — blocking all traffic for ${RECONNECT_HOLD_MS}ms")
-                delay(RECONNECT_HOLD_MS)
-                
+                val oldInterface = vpnInterface
                 vpnInterface = builder.establish()
-                Log.i(TAG, "VPN tunnel established.")
+                if (vpnInterface == null) {
+                    Log.e(TAG, "VPN establish() returned null — no VPN permission?")
+                    _isConnecting.value = false
+                    if (oldInterface == null) _isRunning.value = false
+                    return@launch
+                }
+                Log.i(TAG, "VPN tunnel established successfully.")
+                _isRunning.value = true
+                _isConnecting.value = false
                 restartPacketLoop()
                 oldInterface?.close()
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to establish VPN interface", e)
-                if (oldInterface == null) _isRunning.value = false
+                Log.e(TAG, "Failed to build VPN interface", e)
+                _isConnecting.value = false
             }
         }
     }
@@ -442,54 +458,45 @@ class GateKeeperVpnService : VpnService() {
 
                         when (verdict) {
                             PacketVerdict.ALLOW -> {
-                                // Only explicitly routed IPs enter TUN — if allowed, pass through
+                                val position = packetCopy.position()
+                                val versionAndIhl = packetCopy.get(position)
+                                val version = (versionAndIhl.toInt() shr 4) and 0x0F
+                                if (version == 4) { // IPv4
+                                    val protocol = packetCopy.get(position + 9).toInt() and 0xFF
+                                    if (protocol == 17) { // UDP
+                                        udpRelayHandler?.relay(packetCopy, outputStream, this@runPacketLoop)
+                                    } else if (protocol == 6) { // TCP
+                                        tcpRelayHandler?.handle(packetCopy, outputStream, this@runPacketLoop)
+                                    }
+                                }
                             }
                             PacketVerdict.DROP -> {
+                                // In DNS-only mode this path is for packets that slipped
+                                // into the TUN despite not being DNS (shouldn't happen often).
+                                // We count them but do NOT spam notifications.
                                 _blockedCount.value++
                                 val conn = connectionTracker.getConnectionByBuffer(packetCopy)
-                                val appName = conn?.appName ?: "Unknown App"
-                                val targetIp = conn?.remoteIp ?: "unknown"
-                                postBlockNotification(appName, targetIp, "IP")
-
-                                // F14: Firewall Bypass Detection
-                                // If app is blocked AND reached this IP without using DNS → hardcoded IP bypass
                                 if (conn != null) {
-                                    val resolvedRecently = dnsBlocklistManager.recentDnsResolutions.containsKey(targetIp)
-                                    if (!resolvedRecently && targetIp != "unknown") {
-                                        serviceScope.launch {
-                                            securityAlertRepository.addAlert(
-                                                type = "FIREWALL_BYPASS",
-                                                severity = "HIGH",
-                                                title = "Firewall Bypass Attempt",
-                                                description = "$appName tried to connect to $targetIp using a hardcoded IP (bypassed DNS filter). Connection was blocked.",
-                                                packageName = conn.packageName
-                                            )
-                                        }
-                                        notificationManager.sendTrafficAlert(
-                                            title = "🛡️ Bypass Attempt Blocked",
-                                            message = "$appName tried to connect directly to $targetIp",
-                                            route = "traffic"
-                                        )
-                                        Log.w(TAG, "BYPASS DETECTED: $appName -> $targetIp (hardcoded IP, not DNS-resolved)")
-                                    }
                                     trafficLogger.log(
                                         packageName = conn.packageName ?: "unknown",
-                                        appName = appName,
+                                        appName = conn.appName ?: "Unknown App",
                                         protocol = conn.protocol,
                                         localIp = conn.localIp,
                                         localPort = conn.localPort,
-                                        remoteIp = targetIp,
+                                        remoteIp = conn.remoteIp,
                                         remotePort = conn.remotePort,
                                         wasBlocked = true
                                     )
                                 }
                             }
                             PacketVerdict.DNS_SINKHOLE -> {
+                                // App is firewall-blocked → sinkhole its DNS so it gets no IP
                                 _blockedCount.value++
                                 val domain = dnsResolver?.sinkholePacket(packetCopy, outputStream)
                                 val conn = connectionTracker.getConnectionByBuffer(packetCopy)
                                 val appName = conn?.appName ?: "Unknown App"
-                                if (domain != null) postBlockNotification(appName, domain, "DNS")
+                                // Notify once per app per dedup window (not once per packet)
+                                if (domain != null) postBlockNotification(appName, "Firewall", "DNS")
                                 if (conn != null) {
                                     trafficLogger.log(
                                         packageName = conn.packageName ?: "unknown",
@@ -499,7 +506,7 @@ class GateKeeperVpnService : VpnService() {
                                         localPort = conn.localPort,
                                         remoteIp = conn.remoteIp,
                                         remotePort = 53,
-                                        remoteHostname = domain, // Show domain name in Traffic Monitor
+                                        remoteHostname = domain,
                                         wasBlocked = true
                                     )
                                 }
@@ -573,6 +580,10 @@ class GateKeeperVpnService : VpnService() {
 
         packetFilter = null
         dnsResolver = null
+        udpRelayHandler?.cleanup()
+        udpRelayHandler = null
+        tcpRelayHandler?.cleanup()
+        tcpRelayHandler = null
 
         try {
             unregisterReceiver(screenStateReceiver)
@@ -602,7 +613,9 @@ class GateKeeperVpnService : VpnService() {
     }
 
     private fun postBlockNotification(appName: String, blockedTarget: String, type: String) {
-        val key = "$appName|$blockedTarget"
+        // Dedup key is per-APP only (not per IP/domain) to prevent notification storms.
+        // One notification per app per NOTIF_DEDUP_MS window.
+        val key = appName
         val now = System.currentTimeMillis()
         if ((now - (notifDedup[key] ?: 0L)) < NOTIF_DEDUP_MS) return
         notifDedup[key] = now
@@ -610,10 +623,11 @@ class GateKeeperVpnService : VpnService() {
         val emoji = if (type == "DNS") "🌐" else "🛡️"
         val notification = NotificationCompat.Builder(this, GateKeeperApp.CHANNEL_ALERTS)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
-            .setContentTitle("$emoji GateKeeper blocked a threat")
-            .setContentText("$appName → $blockedTarget")
+            .setContentTitle("$emoji GateKeeper — App Blocked")
+            .setContentText("$appName is blocked by Firewall")
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
             .setContentIntent(
                 PendingIntent.getActivity(
                     this, 0,
@@ -624,7 +638,7 @@ class GateKeeperVpnService : VpnService() {
             .build()
 
         NotificationManagerCompat.from(this)
-            .notify(blockedTarget.hashCode(), notification)
+            .notify((appName.hashCode() and 0xFFFF) + 2000, notification)
     }
 
     override fun onDestroy() {
@@ -643,18 +657,24 @@ class GateKeeperVpnService : VpnService() {
         private const val VPN_DEVICE_ADDRESS_V6 = "fd00:1:fd00:1:fd00:1:fd00:1"
         private const val VPN_DNS_ADDRESS = "10.120.0.2"
         private const val VPN_PREFIX_LENGTH = 32
-        private const val VPN_MTU = 1500
+        // CRITICAL FIX: Increased MTU from 1500 to 16384. Large DNS responses (EDNS0) 
+        // frequently exceed 1500 bytes. A 1500 MTU causes the TUN to drop them.
+        private const val VPN_MTU = 16384
 
         // Observable state for UI
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning.asStateFlow()
 
+        private val _isConnecting = MutableStateFlow(false)
+        val isConnecting: StateFlow<Boolean> = _isConnecting.asStateFlow()
+
         private val _blockedCount = MutableStateFlow(0L)
         val blockedCount: StateFlow<Long> = _blockedCount.asStateFlow()
 
         private val notifDedup = java.util.concurrent.ConcurrentHashMap<String, Long>()
-        private const val NOTIF_DEDUP_MS = 5 * 60 * 1000L
+        // One notification per blocked app per 10 minutes maximum
+        private const val NOTIF_DEDUP_MS = 10 * 60 * 1000L
         
-        private const val RECONNECT_HOLD_MS = 2000L
+        private const val RECONNECT_HOLD_MS = 500L
     }
 }

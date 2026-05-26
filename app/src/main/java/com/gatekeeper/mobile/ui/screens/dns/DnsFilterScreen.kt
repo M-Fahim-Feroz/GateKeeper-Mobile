@@ -13,8 +13,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.scale
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.gatekeeper.mobile.data.db.entity.DnsEntry
 import com.gatekeeper.mobile.ui.components.*
@@ -37,6 +39,7 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
     val isVpnActive by GateKeeperVpnService.isRunning.collectAsState()
 
     val subscriptions by viewModel.subscriptions.collectAsState(initial = emptyList())
+    val isSafeSearchEnabled by viewModel.isSafeSearchEnabled.collectAsState()
 
     val currentList = if (selectedTab == 0) blacklist else whitelist
     val currentListType = if (selectedTab == 0) "blacklist" else "whitelist"
@@ -118,6 +121,38 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                     StatCard("Allowlisted", "$whitelistCount", GradientSuccess, Modifier.weight(1f))
                 }
 
+                // SafeSearch Banner
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(Brush.linearGradient(listOf(SecondaryPurple.copy(0.12f), Color(0xFF1A1A2E))))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp))
+                            .background(SecondaryPurple.copy(0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Filled.ChildCare, null, tint = SecondaryPurple, modifier = Modifier.size(20.dp))
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Enforce SafeSearch", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        Text(
+                            "Force Google, Bing & YouTube into strict mode",
+                            style = MaterialTheme.typography.bodySmall, color = TextSecondary
+                        )
+                    }
+                    Switch(
+                        checked = isSafeSearchEnabled,
+                        onCheckedChange = { viewModel.setSafeSearchEnabled(it) },
+                        modifier = Modifier.scale(0.85f),
+                        colors = SwitchDefaults.colors(checkedThumbColor = SecondaryPurple, checkedTrackColor = SecondaryPurple.copy(0.3f))
+                    )
+                }
+
                 Spacer(Modifier.height(14.dp))
 
                 // Mode toggle chips
@@ -146,7 +181,7 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                         selected = selectedTab == 2,
                         onClick = { selectedTab = 2 },
                         label = { Text("Subscriptions") },
-                        leadingIcon = { Icon(Icons.Filled.LibraryBooks, null, modifier = Modifier.size(16.dp)) },
+                        leadingIcon = { @Suppress("DEPRECATION") Icon(Icons.Filled.LibraryBooks, null, modifier = Modifier.size(16.dp)) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = PrimaryCyan.copy(alpha = 0.15f),
                             selectedLabelColor = PrimaryCyan

@@ -15,6 +15,7 @@ class FirewallRepository @Inject constructor(
     fun observeBlockedCount(): Flow<Int> = dao.observeBlockedCount()
 
     suspend fun getBlockedPackages(): List<String> = dao.getBlockedPackages()
+    suspend fun getAllRules(): List<FirewallRule> = dao.getAllRules()
 
     suspend fun toggleBlock(packageName: String, appName: String, blocked: Boolean) {
         dao.upsert(

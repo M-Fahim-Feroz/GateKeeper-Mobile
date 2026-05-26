@@ -17,7 +17,7 @@ val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "ga
 
 @Singleton
 class SettingsRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     private val dataStore = context.dataStore
 
@@ -34,6 +34,8 @@ class SettingsRepository @Inject constructor(
         val EVIL_TWIN_DETECTION      = booleanPreferencesKey("evil_twin_detection")
         val GLOBAL_CAMERA_BLOCK      = booleanPreferencesKey("global_camera_block")
         val ONBOARDING_DONE          = booleanPreferencesKey("onboarding_done")
+        val AUTO_VPN_START           = booleanPreferencesKey("auto_vpn_start") // VPN on by default
+        val SAFE_SEARCH_ENABLED      = booleanPreferencesKey("safe_search_enabled") // Force SafeSearch
     }
 
     val capturePcapFlow: Flow<Boolean> = dataStore.data.map { it[CAPTURE_PCAP] ?: false }
@@ -47,6 +49,8 @@ class SettingsRepository @Inject constructor(
     val evilTwinDetectionFlow: Flow<Boolean> = dataStore.data.map { it[EVIL_TWIN_DETECTION] ?: true }
     val globalCameraBlockFlow: Flow<Boolean> = dataStore.data.map { it[GLOBAL_CAMERA_BLOCK] ?: false }
     val onboardingDoneFlow: Flow<Boolean> = dataStore.data.map { it[ONBOARDING_DONE] ?: false }
+    val autoVpnStartFlow: Flow<Boolean> = dataStore.data.map { it[AUTO_VPN_START] ?: true }
+    val safeSearchEnabledFlow: Flow<Boolean> = dataStore.data.map { it[SAFE_SEARCH_ENABLED] ?: false }
 
     suspend fun setOnboardingDone() = dataStore.edit { it[ONBOARDING_DONE] = true }
     suspend fun setCapturePcap(enabled: Boolean) = dataStore.edit { it[CAPTURE_PCAP] = enabled }
@@ -59,4 +63,6 @@ class SettingsRepository @Inject constructor(
     suspend fun setBackgroundSensorAlerts(enabled: Boolean) = dataStore.edit { it[BACKGROUND_SENSOR_ALERTS] = enabled }
     suspend fun setEvilTwinDetection(enabled: Boolean) = dataStore.edit { it[EVIL_TWIN_DETECTION] = enabled }
     suspend fun setGlobalCameraBlock(enabled: Boolean) = dataStore.edit { it[GLOBAL_CAMERA_BLOCK] = enabled }
+    suspend fun setAutoVpnStart(enabled: Boolean) = dataStore.edit { it[AUTO_VPN_START] = enabled }
+    suspend fun setSafeSearchEnabled(enabled: Boolean) = dataStore.edit { it[SAFE_SEARCH_ENABLED] = enabled }
 }

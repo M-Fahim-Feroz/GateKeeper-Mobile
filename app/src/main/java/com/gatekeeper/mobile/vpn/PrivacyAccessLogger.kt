@@ -17,7 +17,7 @@ import javax.inject.Singleton
 
 @Singleton
 class PrivacyAccessLogger @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val sensorLogRepository: SensorLogRepository,
     private val notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 ) {

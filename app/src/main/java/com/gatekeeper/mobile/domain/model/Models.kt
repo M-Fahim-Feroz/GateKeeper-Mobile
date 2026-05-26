@@ -12,7 +12,10 @@ data class InstalledApp(
     val isSystemApp: Boolean = false,
     val isBlocked: Boolean = false,
     val uid: Int = -1,
-    val sensitivePermCount: Int = 0  // count of surveillance-tier permissions
+    val sensitivePermCount: Int = 0, // count of surveillance-tier permissions
+    val blockScheduleEnabled: Boolean = false,
+    val blockStartMinutes: Int = 0,
+    val blockEndMinutes: Int = 0
 )
 
 /** Active network connection visible in traffic monitor */

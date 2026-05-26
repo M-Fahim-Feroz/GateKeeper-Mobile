@@ -11,12 +11,14 @@ import javax.inject.Inject
 
 import com.gatekeeper.mobile.data.db.entity.BlocklistSubscription
 import com.gatekeeper.mobile.data.db.dao.BlocklistSubscriptionDao
+import com.gatekeeper.mobile.data.repository.SettingsRepository
 import com.gatekeeper.mobile.vpn.DnsBlocklistManager
 
 @HiltViewModel
 class DnsFilterViewModel @Inject constructor(
     private val dnsRepository: DnsRepository,
     private val blocklistSubscriptionDao: BlocklistSubscriptionDao,
+    private val settingsRepository: SettingsRepository,
     private val dnsBlocklistManager: DnsBlocklistManager
 ) : ViewModel() {
 
@@ -24,6 +26,14 @@ class DnsFilterViewModel @Inject constructor(
     val whitelist: Flow<List<DnsEntry>> = dnsRepository.observeWhitelist()
     val blacklistCount: Flow<Int> = dnsRepository.observeBlacklistCount()
     val whitelistCount: Flow<Int> = dnsRepository.observeWhitelistCount()
+
+    // Feature 4D: SafeSearch
+    val isSafeSearchEnabled: StateFlow<Boolean> = settingsRepository.safeSearchEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    fun setSafeSearchEnabled(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setSafeSearchEnabled(enabled) }
+    }
 
     fun addDomain(domain: String, listType: String) {
         viewModelScope.launch {

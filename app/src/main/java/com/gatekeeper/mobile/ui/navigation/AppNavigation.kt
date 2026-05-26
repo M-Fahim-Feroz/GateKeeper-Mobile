@@ -30,6 +30,7 @@ import com.gatekeeper.mobile.ui.screens.settings.SettingsAboutScreen
 import com.gatekeeper.mobile.ui.screens.traffic.TrafficScreen
 import com.gatekeeper.mobile.ui.screens.threats.ThreatFeedScreen
 import com.gatekeeper.mobile.ui.screens.permissionauditor.PermissionAuditorScreen
+import com.gatekeeper.mobile.ui.screens.permissionauditor.PrivacyDashboardScreen
 import com.gatekeeper.mobile.ui.screens.wifiscanner.WifiScannerScreen
 import com.gatekeeper.mobile.ui.screens.certaudit.CertAuditScreen
 import com.gatekeeper.mobile.ui.theme.*
@@ -174,6 +175,7 @@ fun AppNavigation(
             composable("settings/about") { SettingsAboutScreen(navController = navController) }
             composable(Screen.ThreatFeed.route) { ThreatFeedScreen(navController = navController) }
             composable(Screen.PermissionAuditor.route) { PermissionAuditorScreen(navController = navController) }
+            composable("privacy_dashboard") { PrivacyDashboardScreen(navController = navController) }
             composable(Screen.WifiScanner.route) { WifiScannerScreen(navController = navController) }
             composable(Screen.CertAudit.route) { CertAuditScreen(navController = navController) }
             composable("onboarding") {

@@ -13,7 +13,7 @@ import javax.inject.Singleton
 
 @Singleton
 class GKNotificationManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
 
     fun sendSecurityAlert(title: String, message: String, route: String) {

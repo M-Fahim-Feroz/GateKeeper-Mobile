@@ -32,6 +32,9 @@ class DnsBlocklistManager @Inject constructor(
     private val blacklistedDomains = ConcurrentHashMap.newKeySet<String>()
     private val whitelistedDomains = ConcurrentHashMap.newKeySet<String>()
     private val scope = CoroutineScope(Dispatchers.IO)
+    
+    @Volatile
+    var isSafeSearchEnabled: Boolean = true // Feature 4D
 
     // F14: DNS resolution cache — tracks recently resolved IPs to detect hardcoded-IP bypass
     val recentDnsResolutions = ConcurrentHashMap<String, Long>() // IP -> timestamp
@@ -46,12 +49,23 @@ class DnsBlocklistManager @Inject constructor(
     }
 
     /**
-     * Initial one-time load from database on VPN startup.
+     * Suspending: loads blocklist from DB and awaits completion.
+     * Call this from a coroutine before establishing the VPN tunnel so the
+     * in-memory blocked-domain set is populated before any DNS queries arrive.
+     */
+    suspend fun awaitInitialLoad() {
+        try {
+            reloadAll()
+        } catch (e: Exception) {
+            Log.e(TAG, "awaitInitialLoad failed", e)
+        }
+    }
+
+    /**
+     * Fire-and-forget version (kept for compatibility).
      */
     fun loadFromDatabase() {
-        scope.launch {
-            reloadAll()
-        }
+        scope.launch { reloadAll() }
     }
 
     /**

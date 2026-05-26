@@ -14,7 +14,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class GetInstalledAppsUseCase @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     // Surveillance-tier permissions — same set as PermissionAuditor SURVEILLANCE_PERMS
     private val SURVEILLANCE_PERMS = setOf(

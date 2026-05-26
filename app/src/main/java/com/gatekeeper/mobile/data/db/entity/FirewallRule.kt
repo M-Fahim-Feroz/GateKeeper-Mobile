@@ -16,6 +16,9 @@ data class FirewallRule(
     val blockWhenScreenOff: Boolean = false,  // F8: Block this app's network when screen turns off
     val blockWifi: Boolean = true,
     val blockMobileData: Boolean = true,
+    val blockScheduleEnabled: Boolean = false, // Feature 4C: Time-based blocking
+    val blockStartMinutes: Int = 0, // Minutes from midnight (e.g. 1320 = 22:00)
+    val blockEndMinutes: Int = 0,   // Minutes from midnight (e.g. 420 = 07:00)
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 )

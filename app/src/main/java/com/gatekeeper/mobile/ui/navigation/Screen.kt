@@ -78,6 +78,8 @@ sealed class Screen(
     )
 
     companion object {
-        val bottomNavItems = listOf(Dashboard, Firewall, DnsFilter, Traffic, AiChat)
+        // Bottom nav: Dashboard, Firewall, DNS, Traffic, Settings
+        // AI Chat is kept as a route but removed from the nav bar
+        val bottomNavItems = listOf(Dashboard, Firewall, DnsFilter, Traffic, Settings)
     }
 }

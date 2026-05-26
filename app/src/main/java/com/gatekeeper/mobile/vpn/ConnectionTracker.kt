@@ -20,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Singleton
 class ConnectionTracker @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
 
     data class Connection(

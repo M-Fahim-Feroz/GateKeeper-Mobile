@@ -9,7 +9,7 @@ import javax.inject.Singleton
 
 @Singleton
 class GeoIpResolver @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     // Lazy-load the DB once on first use. ~6MB in RAM but loaded once per app lifecycle.
     private val reader: DatabaseReader? by lazy {

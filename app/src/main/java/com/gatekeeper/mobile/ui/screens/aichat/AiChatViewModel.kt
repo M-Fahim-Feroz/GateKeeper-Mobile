@@ -23,7 +23,7 @@ class AiChatViewModel @Inject constructor(
     private val firewallRepository: FirewallRepository,
     private val dnsRepository: DnsRepository,
     private val ipRuleDao: IpRuleDao,
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _messages = MutableStateFlow<List<ChatMessage>>(

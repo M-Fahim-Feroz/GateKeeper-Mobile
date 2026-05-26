@@ -51,6 +51,7 @@ fun DashboardScreen(
     val scope = rememberCoroutineScope()
 
     val isVpnActive by GateKeeperVpnService.isRunning.collectAsState()
+    val isConnecting by GateKeeperVpnService.isConnecting.collectAsState()
     val blockedCount by GateKeeperVpnService.blockedCount.collectAsState()
 
     val appsProtected by viewModel.blockedAppsCount.collectAsState(initial = 0)
@@ -125,7 +126,9 @@ fun DashboardScreen(
                 // VPN Hero Card
                 VpnHeroCard(
                     isActive = isVpnActive,
+                    isConnecting = isConnecting,
                     onToggle = {
+                        if (isConnecting) return@VpnHeroCard
                         if (isVpnActive) {
                             context.startService(Intent(context, GateKeeperVpnService::class.java).apply { action = GateKeeperVpnService.ACTION_STOP })
                         } else {
@@ -218,6 +221,45 @@ fun DashboardScreen(
                 Spacer(Modifier.height(16.dp))
             }
 
+            // ── Setup Checklist ─────────────────────────────────────────────
+            val showChecklist = !isVpnActive || appsProtected == 0 || threatCount == 0
+            if (showChecklist) {
+                SectionHeader("Getting Started")
+                Spacer(Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(DarkCard)
+                        .padding(16.dp)
+                ) {
+                    ChecklistItem(
+                        title = "Start VPN Protection",
+                        isDone = isVpnActive,
+                        onClick = {
+                            if (!isVpnActive) {
+                                val prepareIntent = VpnService.prepare(context)
+                                if (prepareIntent != null) vpnLauncher.launch(prepareIntent)
+                                else context.startForegroundService(Intent(context, GateKeeperVpnService::class.java).apply { action = GateKeeperVpnService.ACTION_START })
+                            }
+                        }
+                    )
+                    HorizontalDivider(color = BorderDefault, modifier = Modifier.padding(vertical = 8.dp))
+                    ChecklistItem(
+                        title = "Secure Apps with Firewall",
+                        isDone = appsProtected > 0,
+                        onClick = { if (appsProtected == 0) navController.navigate("firewall") }
+                    )
+                    HorizontalDivider(color = BorderDefault, modifier = Modifier.padding(vertical = 8.dp))
+                    ChecklistItem(
+                        title = "Enable DNS Threat Feeds",
+                        isDone = threatCount > 0,
+                        onClick = { if (threatCount == 0) navController.navigate("threat_feed") }
+                    )
+                }
+                Spacer(Modifier.height(24.dp))
+            }
+
             // ── Security Tools Grid ─────────────────────────────────────────────
             SectionHeader(title = "Security Tools")
             Spacer(Modifier.height(8.dp))
@@ -254,6 +296,12 @@ fun DashboardScreen(
                     gradientColors = listOf(Color(0xFF6C63FF), Color(0xFF3B33C3)), onClick = { navController.navigate("threat_feed") }, modifier = Modifier.weight(1f)
                 )
             }
+            Spacer(Modifier.height(12.dp))
+            // Privacy Dashboard — full-width banner card for visibility
+            PrivacyDashboardBannerCard(
+                cameraCount = bgSensorCount,
+                onClick = { navController.navigate("privacy_dashboard") }
+            )
 
             Spacer(Modifier.height(24.dp))
 
@@ -467,6 +515,7 @@ private fun alertIcon(type: String): ImageVector = when (type) {
 @Composable
 fun VpnHeroCard(
     isActive: Boolean, 
+    isConnecting: Boolean,
     onToggle: () -> Unit
 ) {
     val bgBrush = if (isActive)
@@ -521,24 +570,34 @@ fun VpnHeroCard(
                     onClick = onToggle,
                     modifier = Modifier.height(44.dp).width(120.dp),
                     shape = RoundedCornerShape(12.dp),
+                    enabled = !isConnecting,
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = if (isActive) StatusOnline.copy(alpha = 0.2f) else AccentRed.copy(alpha = 0.2f)
+                        containerColor = if (isActive) StatusOnline.copy(alpha = 0.2f) else AccentRed.copy(alpha = 0.2f),
+                        disabledContainerColor = TextTertiary.copy(alpha = 0.2f)
                     )
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = if (isActive) Icons.Filled.Power else Icons.Filled.PowerOff,
-                            contentDescription = "Toggle VPN",
-                            tint = if (isActive) StatusOnline else AccentRed,
-                            modifier = Modifier.size(20.dp)
+                    if (isConnecting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            color = PrimaryCyan,
+                            strokeWidth = 2.dp
                         )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            if (isActive) "Disconnect" else "Connect",
-                            color = if (isActive) StatusOnline else AccentRed,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                        )
+                    } else {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = if (isActive) Icons.Filled.Power else Icons.Filled.PowerOff,
+                                contentDescription = "Toggle VPN",
+                                tint = if (isActive) StatusOnline else AccentRed,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                if (isActive) "Disconnect" else "Connect",
+                                color = if (isActive) StatusOnline else AccentRed,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }
@@ -591,5 +650,91 @@ fun MiniTrafficRow(log: com.gatekeeper.mobile.data.db.entity.ConnectionLog) {
         Spacer(Modifier.width(8.dp))
         Text(log.appName ?: "System", style = MaterialTheme.typography.bodySmall, color = TextPrimary, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
         Text(formatter.format(Date(log.timestamp)), style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+    }
+}
+
+@Composable
+fun PrivacyDashboardBannerCard(cameraCount: Int, onClick: () -> Unit) {
+    val pulse = androidx.compose.animation.core.rememberInfiniteTransition(label = "privacy_pulse")
+    val glow by pulse.animateFloat(
+        initialValue = 0.15f, targetValue = 0.35f,
+        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse),
+        label = "glow"
+    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        AccentOrange.copy(if (cameraCount > 0) glow else 0.08f),
+                        PrimaryCyan.copy(0.06f)
+                    )
+                )
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
+                .background(AccentOrange.copy(0.15f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Filled.PrivacyTip, null, tint = AccentOrange, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(
+                "Privacy Dashboard",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+            Text(
+                if (cameraCount > 0)
+                    "$cameraCount background sensor access${if (cameraCount > 1) "es" else ""} today — tap to review"
+                else
+                    "Camera, mic & location usage log — today at a glance",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+        }
+        Icon(Icons.Filled.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
+    }
+}
+
+@Composable
+fun ChecklistItem(title: String, isDone: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(24.dp).clip(CircleShape)
+                .background(if (isDone) AccentGreen.copy(alpha = 0.2f) else DarkSurface),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isDone) {
+                Icon(Icons.Filled.Check, null, tint = AccentGreen, modifier = Modifier.size(16.dp))
+            } else {
+                Box(Modifier.size(8.dp).clip(CircleShape).background(TextTertiary))
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(
+            title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = if (isDone) TextSecondary else TextPrimary,
+            fontWeight = if (isDone) FontWeight.Normal else FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+        if (!isDone) {
+            Icon(Icons.Filled.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(16.dp))
+        }
     }
 }

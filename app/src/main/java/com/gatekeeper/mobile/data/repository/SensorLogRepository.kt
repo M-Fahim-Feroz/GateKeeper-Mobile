@@ -1,8 +1,11 @@
 package com.gatekeeper.mobile.data.repository
 
+import com.gatekeeper.mobile.data.db.dao.AppSensorUsage
+import com.gatekeeper.mobile.data.db.dao.SensorSummary
 import com.gatekeeper.mobile.data.db.dao.SensorLogDao
 import com.gatekeeper.mobile.data.db.entity.SensorLog
 import kotlinx.coroutines.flow.Flow
+import java.util.Calendar
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -11,6 +14,21 @@ class SensorLogRepository @Inject constructor(
     private val dao: SensorLogDao
 ) {
     fun observeRecent(): Flow<List<SensorLog>> = dao.observeRecent()
+
+    /** Today's sensor summary (Camera/Mic access counts and durations since midnight) */
+    fun observeTodaySummary(): Flow<List<SensorSummary>> = dao.observeTodaySummary(todayMidnightMs())
+
+    /** Per-app breakdown since midnight for the Privacy Dashboard detail list */
+    fun observeTodayPerApp(): Flow<List<AppSensorUsage>> = dao.observeTodayPerApp(todayMidnightMs())
+
+    private fun todayMidnightMs(): Long {
+        return Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
 
     suspend fun logAccessStart(packageName: String, appName: String, sensorType: String, isBackground: Boolean): Long {
         val log = SensorLog(

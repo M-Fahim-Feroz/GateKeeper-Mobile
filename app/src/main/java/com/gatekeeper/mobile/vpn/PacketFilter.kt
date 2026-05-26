@@ -2,6 +2,7 @@ package com.gatekeeper.mobile.vpn
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Verdict for packet filtering decisions.
@@ -20,11 +21,16 @@ enum class PacketVerdict {
  */
 class PacketFilter {
 
-    private val blockedUids = mutableSetOf<Int>()
-    private val blockedIps = mutableSetOf<String>()
-    private val blockedPorts = mutableSetOf<Int>()
-    // F8: Only these UIDs are blocked when screen turns off (user-selected, not all apps)
-    private val screenOffBlockedUids = mutableSetOf<Int>()
+    // Use ConcurrentHashMap variants for all sets/maps — these are read on the packet loop
+    // thread and written from coroutines, so they MUST be thread-safe (Issue 4 fix)
+    private val blockedUids = ConcurrentHashMap.newKeySet<Int>()
+    private val blockedIps = ConcurrentHashMap.newKeySet<String>()
+    private val blockedPorts = ConcurrentHashMap.newKeySet<Int>()
+    private val screenOffBlockedUids = ConcurrentHashMap.newKeySet<Int>()
+
+    // Feature 4C: Time-Based Block Schedules
+    data class Schedule(val startMins: Int, val endMins: Int)
+    private val scheduledBlockedUids = ConcurrentHashMap<Int, Schedule>()
 
     // F15: Known DNS-over-HTTPS providers — apps connecting to these bypass our DNS filter
     private val dohProviderIps = setOf(
@@ -43,7 +49,24 @@ class PacketFilter {
      * Inspect a raw IP packet and decide whether to allow, drop, or intercept.
      */
     fun filter(packet: ByteBuffer, uid: Int? = null): PacketVerdict {
-        val isBlockedUid = uid != null && uid != -1 && blockedUids.contains(uid)
+        var isBlockedUid = uid != null && uid != -1 && blockedUids.contains(uid)
+        
+        // Feature 4C: Check Time-Based Block Schedule
+        if (!isBlockedUid && uid != null && uid != -1) {
+            val schedule = scheduledBlockedUids[uid]
+            if (schedule != null) {
+                val now = java.util.Calendar.getInstance()
+                val currentMins = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
+                val isTimeBlocked = if (schedule.startMins <= schedule.endMins) {
+                    currentMins in schedule.startMins..schedule.endMins
+                } else {
+                    currentMins >= schedule.startMins || currentMins <= schedule.endMins
+                }
+                if (isTimeBlocked) {
+                    isBlockedUid = true
+                }
+            }
+        }
 
         // Save original position
         val position = packet.position()
@@ -78,6 +101,12 @@ class PacketFilter {
                     if (dstPort == 443 && dohProviderIps.contains(dstIp)) {
                         return PacketVerdict.DNS_LEAK
                     }
+                    
+                    // Drop TCP DNS. Our DnsResolver only handles UDP.
+                    // Dropping it natively forces apps to fallback to UDP or fail fast instead of hanging.
+                    if (dstPort == 53) {
+                        return PacketVerdict.DROP
+                    }
                 } else if (protocol == 17 && packet.remaining() >= 4) { // UDP
                     packet.short // Skip Src port
                     dstPort = packet.short.toInt() and 0xFFFF // Dst port
@@ -86,6 +115,10 @@ class PacketFilter {
                     if (dstPort == 53) {
                         return if (isBlockedUid) PacketVerdict.DNS_SINKHOLE else PacketVerdict.DNS_INTERCEPT
                     }
+                    
+                    // QUIC/HTTP3 (UDP 443) is only dropped if the UID is explicitly blocked.
+                    // We do NOT drop QUIC for non-blocked apps — that breaks Chrome, YouTube, etc.
+                    // The isBlockedUid check at line 121 handles dropping all traffic for blocked apps.
                 }
                 
                 // If it's a blocked UID but not DNS, drop it natively
@@ -155,6 +188,11 @@ class PacketFilter {
     fun updateBlockedUids(uids: Set<Int>) {
         blockedUids.clear()
         blockedUids.addAll(uids)
+    }
+
+    fun updateScheduledBlockedUids(rules: Map<Int, Schedule>) {
+        scheduledBlockedUids.clear()
+        scheduledBlockedUids.putAll(rules)
     }
 
     fun updateBlockedIps(ips: Set<String>) {

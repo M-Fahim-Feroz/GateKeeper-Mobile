@@ -177,7 +177,8 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                         app = app,
                         isScreenOffBlocked = app.packageName in screenOffBlockedPkgs,
                         onToggle = { excluded -> viewModel.toggleBlock(app.packageName, app.appName, excluded) },
-                        onScreenOffToggle = { block -> viewModel.toggleScreenOffBlock(app.packageName, app.appName, block) }
+                        onScreenOffToggle = { block -> viewModel.toggleScreenOffBlock(app.packageName, app.appName, block) },
+                        onScheduleUpdate = { enabled, start, end -> viewModel.updateSchedule(app.packageName, app.appName, enabled, start, end) }
                     )
                 }
                 item { Spacer(Modifier.height(80.dp)) }
@@ -186,14 +187,18 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppFirewallItem(
     app: InstalledApp,
     isScreenOffBlocked: Boolean,
     onToggle: (Boolean) -> Unit,
-    onScreenOffToggle: (Boolean) -> Unit
+    onScreenOffToggle: (Boolean) -> Unit,
+    onScheduleUpdate: (Boolean, Int, Int) -> Unit
 ) {
     val excluded = app.isBlocked
+    var isExpanded by remember { mutableStateOf(false) }
+
     val shape = RoundedCornerShape(14.dp)
     val borderBrush = if (excluded)
         Brush.horizontalGradient(GradientOrange.map { it.copy(alpha = 0.4f) })
@@ -205,6 +210,7 @@ fun AppFirewallItem(
             .fillMaxWidth()
             .clip(shape)
             .background(DarkCard)
+            .clickable { isExpanded = !isExpanded }
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -288,5 +294,152 @@ fun AppFirewallItem(
                 )
             }
         }
+
+        // Schedule sub-row
+        androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+            ) {
+                HorizontalDivider(color = BorderDefault, modifier = Modifier.padding(bottom = 8.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.Schedule, null,
+                            tint = if (app.blockScheduleEnabled) PrimaryCyan else TextTertiary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                "Time Schedule",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (app.blockScheduleEnabled) TextPrimary else TextSecondary
+                            )
+                            if (app.blockScheduleEnabled) {
+                                val startStr = String.format("%02d:%02d", app.blockStartMinutes / 60, app.blockStartMinutes % 60)
+                                val endStr = String.format("%02d:%02d", app.blockEndMinutes / 60, app.blockEndMinutes % 60)
+                                Text("$startStr - $endStr", style = MaterialTheme.typography.labelSmall, color = PrimaryCyan)
+                            } else {
+                                Text("Not scheduled", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                            }
+                        }
+                    }
+
+                    Switch(
+                        checked = app.blockScheduleEnabled,
+                        onCheckedChange = { onScheduleUpdate(it, app.blockStartMinutes, app.blockEndMinutes) },
+                        modifier = Modifier.size(width = 40.dp, height = 24.dp),
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = PrimaryCyan,
+                            checkedTrackColor = PrimaryCyan.copy(alpha = 0.25f),
+                            uncheckedThumbColor = TextTertiary,
+                            uncheckedTrackColor = DarkSurface
+                        )
+                    )
+                }
+
+                if (app.blockScheduleEnabled) {
+                    var showStartTimePicker by remember { mutableStateOf(false) }
+                    var showEndTimePicker by remember { mutableStateOf(false) }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        OutlinedButton(
+                            onClick = { showStartTimePicker = true },
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderDefault),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                        ) {
+                            val startStr = String.format("%02d:%02d", app.blockStartMinutes / 60, app.blockStartMinutes % 60)
+                            Text("Start: $startStr", style = MaterialTheme.typography.bodySmall)
+                        }
+
+                        OutlinedButton(
+                            onClick = { showEndTimePicker = true },
+                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderDefault),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                        ) {
+                            val endStr = String.format("%02d:%02d", app.blockEndMinutes / 60, app.blockEndMinutes % 60)
+                            Text("End: $endStr", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    if (showStartTimePicker) {
+                        TimePickerDialog(
+                            initialHour = app.blockStartMinutes / 60,
+                            initialMinute = app.blockStartMinutes % 60,
+                            onDismiss = { showStartTimePicker = false },
+                            onConfirm = { h, m ->
+                                onScheduleUpdate(true, h * 60 + m, app.blockEndMinutes)
+                                showStartTimePicker = false
+                            }
+                        )
+                    }
+
+                    if (showEndTimePicker) {
+                        TimePickerDialog(
+                            initialHour = app.blockEndMinutes / 60,
+                            initialMinute = app.blockEndMinutes % 60,
+                            onDismiss = { showEndTimePicker = false },
+                            onConfirm = { h, m ->
+                                onScheduleUpdate(true, app.blockStartMinutes, h * 60 + m)
+                                showEndTimePicker = false
+                            }
+                        )
+                    }
+                }
+            }
+        }
     }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TimePickerDialog(
+    initialHour: Int,
+    initialMinute: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int, Int) -> Unit
+) {
+    val state = rememberTimePickerState(
+        initialHour = initialHour,
+        initialMinute = initialMinute,
+        is24Hour = true
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = DarkSurfaceVariant,
+        title = { Text("Select Time", color = TextPrimary) },
+        text = {
+            TimePicker(state = state, colors = TimePickerDefaults.colors(
+                clockDialColor = DarkBackground,
+                selectorColor = PrimaryCyan,
+                containerColor = DarkCard,
+                timeSelectorSelectedContainerColor = PrimaryCyan.copy(alpha = 0.2f),
+                timeSelectorUnselectedContainerColor = DarkCard,
+                timeSelectorSelectedContentColor = PrimaryCyan,
+                timeSelectorUnselectedContentColor = TextPrimary
+            ))
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(state.hour, state.minute) }) {
+                Text("OK", color = PrimaryCyan, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        }
+    )
 }

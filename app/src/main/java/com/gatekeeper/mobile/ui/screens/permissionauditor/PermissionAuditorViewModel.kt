@@ -2,8 +2,11 @@ package com.gatekeeper.mobile.ui.screens.permissionauditor
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.gatekeeper.mobile.data.db.dao.AppSensorUsage
+import com.gatekeeper.mobile.data.db.dao.SensorSummary
 import com.gatekeeper.mobile.data.db.entity.SensorLog
 import com.gatekeeper.mobile.data.repository.SensorLogRepository
+import com.gatekeeper.mobile.data.repository.SettingsRepository
 import com.gatekeeper.mobile.domain.model.AppPermissionInfo
 import com.gatekeeper.mobile.domain.usecase.ScanAppPermissionsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -19,7 +22,8 @@ import javax.inject.Inject
 @HiltViewModel
 class PermissionAuditorViewModel @Inject constructor(
     private val scanAppPermissionsUseCase: ScanAppPermissionsUseCase,
-    private val sensorLogRepository: SensorLogRepository
+    private val sensorLogRepository: SensorLogRepository,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _scannedApps = MutableStateFlow<List<AppPermissionInfo>>(emptyList())
@@ -31,6 +35,22 @@ class PermissionAuditorViewModel @Inject constructor(
     /** Live sensor access log from Room — updated in real-time by PrivacyAccessLogger */
     val sensorLogs: StateFlow<List<SensorLog>> = sensorLogRepository.observeRecent()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** TODAY: Per-sensor summary (count + total duration) for Privacy Dashboard hero cards */
+    val todaySummary: StateFlow<List<SensorSummary>> = sensorLogRepository.observeTodaySummary()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** TODAY: Per-app breakdown for Privacy Dashboard detail list */
+    val todayPerApp: StateFlow<List<AppSensorUsage>> = sensorLogRepository.observeTodayPerApp()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /** Auto VPN start setting */
+    val autoVpnStart: StateFlow<Boolean> = settingsRepository.autoVpnStartFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    fun setAutoVpnStart(enabled: Boolean) {
+        viewModelScope.launch { settingsRepository.setAutoVpnStart(enabled) }
+    }
 
     private val _scannedCount = MutableStateFlow(0)
     val scannedCount: StateFlow<Int> = _scannedCount.asStateFlow()

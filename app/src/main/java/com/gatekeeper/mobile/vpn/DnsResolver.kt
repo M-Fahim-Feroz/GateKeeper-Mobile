@@ -26,6 +26,16 @@ class DnsResolver(
         private const val TAG = "DnsResolver"
         private val UPSTREAM_DNS = InetAddress.getByName("8.8.8.8")
         private const val DNS_TIMEOUT_MS = 3000
+
+        // Feature 4D: SafeSearch Enforced IPs
+        val SAFESEARCH_REWRITES = mapOf(
+            "google.com" to byteArrayOf(216.toByte(), 239.toByte(), 38.toByte(), 120.toByte()),
+            "www.google.com" to byteArrayOf(216.toByte(), 239.toByte(), 38.toByte(), 120.toByte()),
+            "youtube.com" to byteArrayOf(216.toByte(), 239.toByte(), 38.toByte(), 119.toByte()),
+            "www.youtube.com" to byteArrayOf(216.toByte(), 239.toByte(), 38.toByte(), 119.toByte()),
+            "bing.com" to byteArrayOf(204.toByte(), 79.toByte(), 197.toByte(), 220.toByte()),
+            "www.bing.com" to byteArrayOf(204.toByte(), 79.toByte(), 197.toByte(), 220.toByte())
+        )
     }
 
     // Lock to serialize all writes to the TUN output stream
@@ -94,6 +104,17 @@ class DnsResolver(
                 val response = buildSinkholeResponse(
                     transactionId, srcIp, dstIp, udpSrcPort, udpDstPort,
                     packet.array(), dnsOffset, packet.position()
+                )
+                synchronized(writeLock) {
+                    outputStream.write(response)
+                    outputStream.flush()
+                }
+            } else if (SAFESEARCH_REWRITES.containsKey(domain) && dnsBlocklistManager.isSafeSearchEnabled) {
+                Log.i(TAG, "SafeSearch Enforced: Rewriting [$domain]")
+                val safeIp = SAFESEARCH_REWRITES[domain]!!
+                val response = buildSinkholeResponse(
+                    transactionId, srcIp, dstIp, udpSrcPort, udpDstPort,
+                    packet.array(), dnsOffset, packet.position(), safeIp
                 )
                 synchronized(writeLock) {
                     outputStream.write(response)
@@ -174,7 +195,9 @@ class DnsResolver(
             socket.send(DatagramPacket(dnsPayload, dnsPayload.size, UPSTREAM_DNS, 53))
 
             // Receive the real DNS answer
-            val recvBuf = ByteArray(1500)
+            // CRITICAL FIX: DNS responses with EDNS0 (like LinkedIn's) can be up to 4096 bytes.
+            // Using a 1500 byte buffer silently truncates them, causing app timeouts.
+            val recvBuf = ByteArray(65535)
             val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
             socket.receive(recvPacket)
 
@@ -240,7 +263,8 @@ class DnsResolver(
         origDstPort: Int,
         originalPacket: ByteArray,
         dnsOffset: Int,
-        questionEndOffset: Int
+        questionEndOffset: Int,
+        ipOverride: ByteArray = byteArrayOf(0, 0, 0, 0)
     ): ByteArray {
         val questionLen = questionEndOffset - dnsOffset
         val dnsRespLen = questionLen + 16  // question + one A-record answer
@@ -278,13 +302,13 @@ class DnsResolver(
         // DNS Question (verbatim copy)
         buf.put(originalPacket, dnsOffset + 12, questionLen - 12)
 
-        // DNS Answer → 0.0.0.0
+        // DNS Answer
         buf.putShort(0xC00C.toShort()) // pointer to question name
         buf.putShort(1.toShort())      // A record
         buf.putShort(1.toShort())      // IN class
-        buf.putInt(10)                 // TTL 10 seconds (short so phone re-queries quickly once unblocked)
+        buf.putInt(60)                 // TTL 60 seconds
         buf.putShort(4.toShort())      // RDLENGTH
-        buf.put(byteArrayOf(0, 0, 0, 0)) // 0.0.0.0
+        buf.put(ipOverride)
 
         return buf.array()
     }

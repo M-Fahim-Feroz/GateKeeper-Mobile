@@ -30,10 +30,22 @@ class FirewallViewModel @Inject constructor(
 
     init {
         loadApps()
-        // Observe firewall rules for screen-off state
+        // Observe firewall rules for screen-off and schedule state
         viewModelScope.launch {
             firewallRepository.observeAll().collect { rules ->
-                _screenOffBlockedPkgs.value = rules.filter { it.blockWhenScreenOff }.map { it.packageName }.toSet()
+                val pkgs = rules.filter { it.blockWhenScreenOff }.map { it.packageName }.toSet()
+                _screenOffBlockedPkgs.value = pkgs
+
+                val rulesMap = rules.associateBy { it.packageName }
+                _apps.value = _apps.value.map { app ->
+                    val rule = rulesMap[app.packageName]
+                    app.copy(
+                        isBlocked = rule?.isBlocked ?: false,
+                        blockScheduleEnabled = rule?.blockScheduleEnabled ?: false,
+                        blockStartMinutes = rule?.blockStartMinutes ?: 0,
+                        blockEndMinutes = rule?.blockEndMinutes ?: 0
+                    )
+                }
             }
         }
     }
@@ -42,10 +54,16 @@ class FirewallViewModel @Inject constructor(
         viewModelScope.launch {
             _isLoading.value = true
             val installedApps = getInstalledApps(includeSystem = false)
-            val blockedPackages = firewallRepository.getBlockedPackages().toSet()
+            val rulesMap = firewallRepository.getAllRules().associateBy { it.packageName }
 
             _apps.value = installedApps.map { app ->
-                app.copy(isBlocked = app.packageName in blockedPackages)
+                val rule = rulesMap[app.packageName]
+                app.copy(
+                    isBlocked = rule?.isBlocked ?: false,
+                    blockScheduleEnabled = rule?.blockScheduleEnabled ?: false,
+                    blockStartMinutes = rule?.blockStartMinutes ?: 0,
+                    blockEndMinutes = rule?.blockEndMinutes ?: 0
+                )
             }
             _isLoading.value = false
         }
@@ -54,9 +72,7 @@ class FirewallViewModel @Inject constructor(
     fun toggleBlock(packageName: String, appName: String, blocked: Boolean) {
         viewModelScope.launch {
             firewallRepository.toggleBlock(packageName, appName, blocked)
-            _apps.value = _apps.value.map { app ->
-                if (app.packageName == packageName) app.copy(isBlocked = blocked) else app
-            }
+            // _apps is automatically updated via observeAll() in init
         }
     }
 
@@ -69,6 +85,22 @@ class FirewallViewModel @Inject constructor(
                 appName = appName
             )
             firewallRepository.upsertRule(rule.copy(blockWhenScreenOff = block, updatedAt = System.currentTimeMillis()))
+        }
+    }
+
+    fun updateSchedule(packageName: String, appName: String, enabled: Boolean, start: Int, end: Int) {
+        viewModelScope.launch {
+            val existing = firewallRepository.getRule(packageName)
+            val rule = existing ?: com.gatekeeper.mobile.data.db.entity.FirewallRule(
+                packageName = packageName,
+                appName = appName
+            )
+            firewallRepository.upsertRule(rule.copy(
+                blockScheduleEnabled = enabled,
+                blockStartMinutes = start,
+                blockEndMinutes = end,
+                updatedAt = System.currentTimeMillis()
+            ))
         }
     }
 }

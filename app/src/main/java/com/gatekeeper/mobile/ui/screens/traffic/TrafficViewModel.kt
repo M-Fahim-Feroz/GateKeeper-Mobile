@@ -5,15 +5,19 @@ import androidx.lifecycle.viewModelScope
 import com.gatekeeper.mobile.data.db.dao.CountryCount
 import com.gatekeeper.mobile.data.db.entity.ConnectionLog
 import com.gatekeeper.mobile.data.repository.TrafficRepository
+import com.gatekeeper.mobile.vpn.BandwidthMonitor
 import com.gatekeeper.mobile.vpn.GateKeeperVpnService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
+@OptIn(ExperimentalCoroutinesApi::class)
 class TrafficViewModel @Inject constructor(
-    private val trafficRepository: TrafficRepository
+    private val trafficRepository: TrafficRepository,
+    private val bandwidthMonitor: BandwidthMonitor
 ) : ViewModel() {
 
     private val _timeRange = MutableStateFlow("24h")
@@ -45,6 +49,9 @@ class TrafficViewModel @Inject constructor(
     val totalConnections: Flow<Int> = trafficRepository.observeTotalCount()
     val totalBytesIn: Flow<Long?> = trafficRepository.observeTotalBytesIn()
     val totalBytesOut: Flow<Long?> = trafficRepository.observeTotalBytesOut()
+
+    // Feature 4B: Per-App Bandwidth Usage
+    val bandwidthUsage = bandwidthMonitor.bandwidthFlow
 
     init {
         // Observe VPN state for system event logging

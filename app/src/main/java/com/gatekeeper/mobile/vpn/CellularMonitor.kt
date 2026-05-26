@@ -15,7 +15,7 @@ import javax.inject.Singleton
 
 @Singleton
 class CellularMonitor @Inject constructor(
-    @ApplicationContext private val context: Context,
+    @param:ApplicationContext private val context: Context,
     private val securityAlertRepository: SecurityAlertRepository,
     private val notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 ) {

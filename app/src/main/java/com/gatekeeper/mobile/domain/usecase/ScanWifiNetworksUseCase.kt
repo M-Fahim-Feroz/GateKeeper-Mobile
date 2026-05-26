@@ -13,7 +13,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class ScanWifiNetworksUseCase @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) {
     operator fun invoke(): List<WifiNetworkInfo> {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
