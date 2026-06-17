@@ -20,7 +20,8 @@ import java.util.concurrent.ConcurrentHashMap
  */
 @Singleton
 class ConnectionTracker @Inject constructor(
-    @param:ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val geoIpResolver: GeoIpResolver
 ) {
 
     data class Connection(
@@ -67,22 +68,44 @@ class ConnectionTracker @Inject constructor(
             // 1. Parse IP header
             val versionAndIhl = packet.get(position).toInt()
             val version = (versionAndIhl shr 4) and 0x0F
-            if (version != 4) return null // IPv6 not yet fully tracked
             
-            val ihl = (versionAndIhl and 0x0F) * 4
-            val protocolNum = packet.get(position + 9).toInt() and 0xFF
-            
-            val srcIpBytes = ByteArray(4)
-            val dstIpBytes = ByteArray(4)
-            packet.position(position + 12)
-            packet.get(srcIpBytes)
-            packet.get(dstIpBytes)
-            
-            val srcIp = InetAddress.getByAddress(srcIpBytes)
-            val dstIp = InetAddress.getByAddress(dstIpBytes)
+            val srcIp: InetAddress
+            val dstIp: InetAddress
+            val protocolNum: Int
+            val transportOffset: Int
+
+            if (version == 4) {
+                val ihl = (versionAndIhl and 0x0F) * 4
+                protocolNum = packet.get(position + 9).toInt() and 0xFF
+                
+                val srcIpBytes = ByteArray(4)
+                val dstIpBytes = ByteArray(4)
+                packet.position(position + 12)
+                packet.get(srcIpBytes)
+                packet.get(dstIpBytes)
+                
+                srcIp = InetAddress.getByAddress(srcIpBytes)
+                dstIp = InetAddress.getByAddress(dstIpBytes)
+                transportOffset = position + ihl
+            } else if (version == 6) {
+                if (packet.remaining() < 40) return null
+                protocolNum = packet.get(position + 6).toInt() and 0xFF
+                
+                val srcIpBytes = ByteArray(16)
+                val dstIpBytes = ByteArray(16)
+                packet.position(position + 8)
+                packet.get(srcIpBytes)
+                packet.get(dstIpBytes)
+                
+                srcIp = InetAddress.getByAddress(srcIpBytes)
+                dstIp = InetAddress.getByAddress(dstIpBytes)
+                transportOffset = position + 40
+            } else {
+                return null // Unknown IP version
+            }
 
             // 2. Parse TCP/UDP header
-            packet.position(position + ihl)
+            packet.position(transportOffset)
             val srcPort: Int
             val dstPort: Int
             val protocolName: String
@@ -189,21 +212,11 @@ class ConnectionTracker @Inject constructor(
     }
     
     /**
-     * Fast local IP classifier — no network call, no ANR risk.
-     * Returns a simple region label based on IP prefix ranges.
+     * Fast local IP classifier using GeoIpResolver.
+     * Returns a region label based on IP address.
      */
     private fun classifyIpRegion(ip: String): String {
-        if (ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("172.") || ip.startsWith("127.") || ip.startsWith("fd")) {
-            return "Local Network"
-        }
-        // Classify by first octet (rough continent mapping for demo purposes)
-        val firstOctet = ip.substringBefore(".").toIntOrNull() ?: return "Internet"
-        return when (firstOctet) {
-            in 1..9, in 11..49, in 51..99 -> "Internet"
-            in 100..126 -> "Internet"
-            in 128..223 -> "Internet"
-            else -> "Internet"
-        }
+        return geoIpResolver.resolve(ip).first
     }
 
     fun getActiveConnections(): List<Connection> {
@@ -255,5 +268,13 @@ class ConnectionTracker @Inject constructor(
     fun clear() {
         activeConnections.clear()
         uidAppCache.clear()
+    }
+
+    /** Helper to log inbound data directly from Relay Handlers since they bypass the TUN read loop */
+    fun addInboundBytes(protocol: String, localIp: String, localPort: Int, remoteIp: String, remotePort: Int, bytes: Long) {
+        val connectionId = "$protocol:$localIp:$localPort-$remoteIp:$remotePort"
+        activeConnections[connectionId]?.let {
+            it.bytesIn += bytes
+        }
     }
 }

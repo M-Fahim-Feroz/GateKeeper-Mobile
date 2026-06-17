@@ -20,7 +20,10 @@ data class ParsedUdpPacket(
     val payload: ByteArray
 )
 
-class UdpRelayHandler(private val vpnService: VpnService) {
+class UdpRelayHandler(
+    private val vpnService: VpnService,
+    private val connectionTracker: com.gatekeeper.mobile.vpn.ConnectionTracker
+) {
 
     companion object {
         private const val TAG = "UdpRelayHandler"
@@ -28,6 +31,7 @@ class UdpRelayHandler(private val vpnService: VpnService) {
 
     // Session table: "srcIp:srcPort->dstIp:dstPort" -> DatagramSocket
     private val sessions = ConcurrentHashMap<String, DatagramSocket>()
+    private val sessionTimestamps = ConcurrentHashMap<String, Long>()
     private val writeLock = Object()
 
     fun relay(packet: ByteBuffer, tunOut: FileOutputStream, scope: CoroutineScope) {
@@ -40,16 +44,18 @@ class UdpRelayHandler(private val vpnService: VpnService) {
         // Bug 2 fix: computeIfAbsent is atomic — prevents duplicate socket creation
         val socket = sessions.computeIfAbsent(key) {
             try {
-                DatagramSocket().also {
-                    val protected = vpnService.protect(it)
+                DatagramSocket().apply {
+                    val protected = vpnService.protect(this)
                     if (!protected) Log.w(TAG, "Failed to protect socket for key $key")
-                    it.soTimeout = 10000
+                    soTimeout = 10000
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to create socket for UDP relay", e)
                 throw e
             }
         }
+        
+        sessionTimestamps[key] = System.currentTimeMillis()
 
         scope.launch(Dispatchers.IO) {
             try {
@@ -72,6 +78,12 @@ class UdpRelayHandler(private val vpnService: VpnService) {
                 synchronized(writeLock) {
                     tunOut.write(ipPacket)
                     tunOut.flush()
+                }
+                
+                val srcIpStr = try { InetAddress.getByAddress(parsed.srcIp).hostAddress } catch (e: Exception) { null }
+                val dstIpStr = try { InetAddress.getByAddress(parsed.dstIp).hostAddress } catch (e: Exception) { null }
+                if (srcIpStr != null && dstIpStr != null) {
+                    connectionTracker.addInboundBytes("UDP", srcIpStr, parsed.srcPort, dstIpStr, parsed.dstPort, response.length.toLong())
                 }
             } catch (e: java.net.SocketTimeoutException) {
                 // Normal timeout, ignore
@@ -166,7 +178,20 @@ class UdpRelayHandler(private val vpnService: VpnService) {
     }
 
     fun cleanup() {
-        sessions.values.forEach { it.close() }
+        sessions.values.forEach { 
+            try { it.close() } catch (e: Exception) {} 
+        }
         sessions.clear()
+        sessionTimestamps.clear()
+    }
+
+    fun sweepStaleSessions(maxAgeMs: Long = 60_000) {
+        val cutoff = System.currentTimeMillis() - maxAgeMs
+        sessionTimestamps.entries.removeIf { (key, ts) ->
+            if (ts < cutoff) {
+                sessions.remove(key)?.close()
+                true
+            } else false
+        }
     }
 }

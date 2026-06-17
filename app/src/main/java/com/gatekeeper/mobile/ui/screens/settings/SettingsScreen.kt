@@ -61,34 +61,34 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBackground)
+            .background(LocalGKColors.current.background)
             .verticalScroll(rememberScrollState())
     ) {
         // ── Header ──────────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(TextTertiary.copy(alpha = 0.08f), DarkBackground)))
+                .background(Brush.verticalGradient(listOf(LocalGKColors.current.textTertiary.copy(alpha = 0.08f), LocalGKColors.current.background)))
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             if (navController != null) {
                 IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.ArrowBack, "Back", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.ArrowBack, "Back", tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.height(4.dp))
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
-                        .background(Brush.linearGradient(listOf(PrimaryCyan.copy(alpha = 0.2f), PrimaryBlue.copy(alpha = 0.2f)))),
+                        .background(Brush.linearGradient(listOf(LocalGKColors.current.primary.copy(alpha = 0.2f), PrimaryBlue.copy(alpha = 0.2f)))),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Settings, null, tint = PrimaryCyan, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Filled.Settings, null, tint = LocalGKColors.current.primary, modifier = Modifier.size(24.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Settings", style = MaterialTheme.typography.displaySmall, color = TextPrimary)
-                    Text("GateKeeper Security Configuration", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("Settings", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
+                    Text("GateKeeper Security Configuration", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
                 }
             }
         }
@@ -102,7 +102,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.NightlightRound,
                     title = "Screen-Off Network Blocking",
                     subtitle = "Block apps you've selected when screen turns off. Per-app in Firewall.",
-                    tint = AccentOrange,
+                    tint = LocalGKColors.current.accentOrange,
                     checked = isScreenOffBlockingEnabled,
                     onCheckedChange = { viewModel.setScreenOffBlocking(it) }
                 )
@@ -111,7 +111,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.GppBad,
                     title = "DNS Leak Prevention",
                     subtitle = "Block apps using DNS-over-HTTPS to bypass the DNS filter (e.g., 1.1.1.1, 8.8.8.8 on port 443)",
-                    tint = PrimaryCyan,
+                    tint = LocalGKColors.current.primary,
                     checked = isDnsLeakProtectionEnabled,
                     onCheckedChange = { viewModel.setDnsLeakProtection(it) }
                 )
@@ -120,7 +120,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.BugReport,
                     title = "Firewall Bypass Detection",
                     subtitle = "Alert when blocked apps connect using hardcoded IPs (no DNS lookup)",
-                    tint = AccentRed,
+                    tint = LocalGKColors.current.accentRed,
                     checked = isFirewallBypassDetectEnabled,
                     onCheckedChange = { viewModel.setFirewallBypassDetect(it) }
                 )
@@ -135,7 +135,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.Sensors,
                     title = "DNS Exfiltration Detection",
                     subtitle = "Flag apps with high-entropy DNS queries (Shannon analysis) — possible data exfiltration via DNS tunneling",
-                    tint = AccentYellow,
+                    tint = LocalGKColors.current.accentYellow,
                     checked = isDnsExfilDetectionEnabled,
                     onCheckedChange = { viewModel.setDnsExfilDetection(it) }
                 )
@@ -144,7 +144,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.Mic,
                     title = "Background Sensor Alerts",
                     subtitle = "Alert when apps access Camera, Microphone, or Location while running in background",
-                    tint = AccentOrange,
+                    tint = LocalGKColors.current.accentOrange,
                     checked = isBackgroundSensorAlertsEnabled,
                     onCheckedChange = { viewModel.setBackgroundSensorAlerts(it) }
                 )
@@ -153,7 +153,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.NoPhotography,
                     title = "Global Camera Block",
                     subtitle = "Blocks camera access for all apps system-wide (requires Device Admin)",
-                    tint = AccentRed,
+                    tint = LocalGKColors.current.accentRed,
                     checked = isGlobalCameraBlockEnabled,
                     onCheckedChange = { isChecked ->
                         if (isChecked) {
@@ -194,7 +194,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.CellTower,
                     title = "IMSI Catcher Detection",
                     subtitle = "Alert on 4G→2G cellular downgrade — possible fake tower (Stingray) nearby",
-                    tint = AccentRed,
+                    tint = LocalGKColors.current.accentRed,
                     checked = isImsiDetectionEnabled,
                     onCheckedChange = { viewModel.setImsiDetection(it) }
                 )
@@ -203,7 +203,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.Wifi,
                     title = "Evil Twin AP Detection",
                     subtitle = "Detect duplicate Wi-Fi networks that may be rogue access points performing MITM",
-                    tint = AccentYellow,
+                    tint = LocalGKColors.current.accentYellow,
                     checked = isEvilTwinDetectionEnabled,
                     onCheckedChange = { viewModel.setEvilTwinDetection(it) }
                 )
@@ -218,7 +218,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.Notifications,
                     title = "Notification Preferences",
                     subtitle = "Manage security alerts, heads-up notifications, and sound",
-                    tint = AccentOrange,
+                    tint = LocalGKColors.current.accentOrange,
                     onClick = {
                         val intent = Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
                             putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
@@ -240,7 +240,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.FileDownload,
                     title = "Export Traffic Logs",
                     subtitle = "Save connection logs as CSV for analysis",
-                    tint = AccentGreen,
+                    tint = LocalGKColors.current.accentGreen,
                     onClick = {
                         scope.launch {
                             val result = viewModel.exportTrafficLogs(context)
@@ -254,7 +254,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.Rule,
                     title = "Export Firewall Rules",
                     subtitle = "Save current firewall rules as JSON",
-                    tint = AccentGreen,
+                    tint = LocalGKColors.current.accentGreen,
                     onClick = {
                         scope.launch {
                             val result = viewModel.exportRules(context)
@@ -274,7 +274,7 @@ fun SettingsScreen(
                     icon = Icons.Filled.Computer,
                     title = "Backend IP Address",
                     subtitle = backendIp.ifEmpty { "Not configured — tap to set" },
-                    tint = PrimaryCyan,
+                    tint = LocalGKColors.current.primary,
                     onClick = { tempIp = backendIp; showIpDialog = true }
                 )
             }
@@ -286,29 +286,29 @@ fun SettingsScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(16.dp))
-                    .background(Brush.linearGradient(listOf(PrimaryCyan.copy(alpha = 0.05f), PrimaryBlue.copy(alpha = 0.07f))))
+                    .background(Brush.linearGradient(listOf(LocalGKColors.current.primary.copy(alpha = 0.05f), PrimaryBlue.copy(alpha = 0.07f))))
                     .padding(16.dp)
             ) {
-                Text("🛡️  GateKeeper Security Feature Matrix", style = MaterialTheme.typography.titleMedium, color = PrimaryCyan, fontWeight = FontWeight.Bold)
+                Text("🛡️  GateKeeper Security Feature Matrix", style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
                 val features = listOf(
-                    "✅ VPN Split-Tunnel (per-app firewall)" to PrimaryCyan,
-                    "✅ DNS Sinkhole (domain-level blocking)" to PrimaryCyan,
-                    "✅ DNS-over-HTTPS Leak Prevention" to PrimaryCyan,
-                    "✅ DNS Exfiltration (Shannon Entropy)" to PrimaryCyan,
-                    "✅ Firewall Bypass Detection (IP direct)" to PrimaryCyan,
-                    "✅ Screen-Off Per-App Blocking" to AccentGreen,
-                    "✅ IMSI Catcher / 2G Downgrade Alert" to AccentGreen,
-                    "✅ Evil Twin AP Detection" to AccentGreen,
-                    "✅ Rogue SSL Certificate Auditor" to AccentGreen,
-                    "✅ Real-time Sensor Access Logging" to AccentGreen,
-                    "✅ Background Camera/Mic/Location Alert" to AccentGreen,
-                    "✅ DNS Blocklist Subscriptions" to AccentYellow,
-                    "✅ GeoIP Country Blocking" to AccentYellow,
-                    "✅ PCAP Packet Capture (Wireshark)" to AccentYellow,
-                    "✅ Threat Intelligence Feed Import" to AccentYellow,
-                    "✅ AI Security Assistant" to AccentOrange,
-                    "✅ Traffic Monitor (per-app)" to AccentOrange,
+                    "✅ VPN Split-Tunnel (per-app firewall)" to LocalGKColors.current.primary,
+                    "✅ DNS Sinkhole (domain-level blocking)" to LocalGKColors.current.primary,
+                    "✅ DNS-over-HTTPS Leak Prevention" to LocalGKColors.current.primary,
+                    "✅ DNS Exfiltration (Shannon Entropy)" to LocalGKColors.current.primary,
+                    "✅ Firewall Bypass Detection (IP direct)" to LocalGKColors.current.primary,
+                    "✅ Screen-Off Per-App Blocking" to LocalGKColors.current.accentGreen,
+                    "✅ IMSI Catcher / 2G Downgrade Alert" to LocalGKColors.current.accentGreen,
+                    "✅ Evil Twin AP Detection" to LocalGKColors.current.accentGreen,
+                    "✅ Rogue SSL Certificate Auditor" to LocalGKColors.current.accentGreen,
+                    "✅ Real-time Sensor Access Logging" to LocalGKColors.current.accentGreen,
+                    "✅ Background Camera/Mic/Location Alert" to LocalGKColors.current.accentGreen,
+                    "✅ DNS Blocklist Subscriptions" to LocalGKColors.current.accentYellow,
+                    "✅ GeoIP Country Blocking" to LocalGKColors.current.accentYellow,
+                    "✅ PCAP Packet Capture (Wireshark)" to LocalGKColors.current.accentYellow,
+                    "✅ Threat Intelligence Feed Import" to LocalGKColors.current.accentYellow,
+                    "✅ AI Security Assistant" to LocalGKColors.current.accentOrange,
+                    "✅ Traffic Monitor (per-app)" to LocalGKColors.current.accentOrange,
                 )
                 features.forEach { (text, color) ->
                     Row(modifier = Modifier.padding(vertical = 3.dp)) {
@@ -327,13 +327,13 @@ fun SettingsScreen(
                 Text(
                     "GateKeeper Mobile v1.0.0",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = TextSecondary,
+                    color = LocalGKColors.current.textSecondary,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
                     "Final Year Project — Mobile Network Security Suite\nCore engine powered by Android VpnService API",
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextTertiary,
+                    color = LocalGKColors.current.textTertiary,
                     textAlign = TextAlign.Center
                 )
                 Spacer(Modifier.height(16.dp))
@@ -344,38 +344,38 @@ fun SettingsScreen(
     if (showIpDialog) {
         AlertDialog(
             onDismissRequest = { showIpDialog = false },
-            containerColor = DarkSurfaceVariant,
-            title = { Text("Configure Backend IP", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            containerColor = LocalGKColors.current.surfaceVariant,
+            title = { Text("Configure Backend IP", color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold) },
             text = {
                 Column {
                     Text(
                         "Enter the IPv4 address of your PC running GateKeeper Desktop (e.g. 192.168.1.100). This enables bidirectional threat intelligence sync.",
-                        color = TextSecondary,
+                        color = LocalGKColors.current.textSecondary,
                         style = MaterialTheme.typography.bodySmall
                     )
                     Spacer(Modifier.height(16.dp))
                     OutlinedTextField(
                         value = tempIp,
                         onValueChange = { tempIp = it },
-                        label = { Text("IP Address", color = TextTertiary) },
+                        label = { Text("IP Address", color = LocalGKColors.current.textTertiary) },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PrimaryCyan,
-                            unfocusedBorderColor = GlassBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
+                            focusedBorderColor = LocalGKColors.current.primary,
+                            unfocusedBorderColor = LocalGKColors.current.border,
+                            focusedTextColor = LocalGKColors.current.textPrimary,
+                            unfocusedTextColor = LocalGKColors.current.textPrimary
                         )
                     )
                 }
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.setBackendIp(tempIp.trim()); showIpDialog = false }) {
-                    Text("Save", color = PrimaryCyan, fontWeight = FontWeight.Bold)
+                    Text("Save", color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showIpDialog = false }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text("Cancel", color = LocalGKColors.current.textSecondary)
                 }
             }
         )
@@ -389,7 +389,7 @@ fun SettingsSectionLabel(label: String) {
     Text(
         label,
         style = MaterialTheme.typography.titleSmall,
-        color = PrimaryCyan,
+        color = LocalGKColors.current.primary,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.padding(start = 4.dp, bottom = 8.dp, top = 4.dp)
     )
@@ -401,7 +401,7 @@ fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(DarkCard),
+            .background(LocalGKColors.current.card),
         content = content
     )
 }
@@ -410,7 +410,7 @@ fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
 fun SettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(horizontal = 16.dp),
-        color = GlassBorder,
+        color = LocalGKColors.current.border,
         thickness = 0.5.dp
     )
 }
@@ -420,7 +420,7 @@ fun SettingsItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    tint: Color = PrimaryCyan,
+    tint: Color = LocalGKColors.current.primary,
     onClick: () -> Unit,
     isDestructive: Boolean = false
 ) {
@@ -440,10 +440,10 @@ fun SettingsItem(
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = if (isDestructive) AccentRed else TextPrimary)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary, lineHeight = MaterialTheme.typography.bodySmall.lineHeight)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = if (isDestructive) LocalGKColors.current.accentRed else LocalGKColors.current.textPrimary)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary, lineHeight = MaterialTheme.typography.bodySmall.lineHeight)
         }
-        Icon(Icons.Filled.ChevronRight, null, tint = TextTertiary, modifier = Modifier.size(18.dp))
+        Icon(Icons.Filled.ChevronRight, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(18.dp))
     }
 }
 
@@ -452,7 +452,7 @@ fun SettingsSwitch(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    tint: Color = PrimaryCyan,
+    tint: Color = LocalGKColors.current.primary,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit
 ) {
@@ -468,13 +468,13 @@ fun SettingsSwitch(
                 .background(tint.copy(alpha = if (checked) 0.18f else 0.08f)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, null, tint = if (checked) tint else TextTertiary, modifier = Modifier.size(20.dp))
+            Icon(icon, null, tint = if (checked) tint else LocalGKColors.current.textTertiary, modifier = Modifier.size(20.dp))
         }
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Medium)
             Spacer(Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary, lineHeight = MaterialTheme.typography.bodySmall.lineHeight)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary, lineHeight = MaterialTheme.typography.bodySmall.lineHeight)
         }
         Spacer(Modifier.width(8.dp))
         Switch(
@@ -483,8 +483,8 @@ fun SettingsSwitch(
             colors = SwitchDefaults.colors(
                 checkedThumbColor = tint,
                 checkedTrackColor = tint.copy(alpha = 0.3f),
-                uncheckedThumbColor = TextTertiary,
-                uncheckedTrackColor = DarkSurfaceVariant
+                uncheckedThumbColor = LocalGKColors.current.textTertiary,
+                uncheckedTrackColor = LocalGKColors.current.surfaceVariant
             )
         )
     }

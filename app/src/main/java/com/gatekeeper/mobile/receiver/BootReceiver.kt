@@ -5,6 +5,10 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import com.gatekeeper.mobile.vpn.GateKeeperVpnService
+import com.gatekeeper.mobile.data.repository.SettingsRepository
+import com.gatekeeper.mobile.data.repository.dataStore
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.first
 
 /**
  * Listens for BOOT_COMPLETED to auto-start the VPN service
@@ -15,12 +19,15 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             Log.i("BootReceiver", "Device booted — checking VPN auto-start preference")
 
-            // Phase 2: Check DataStore preference for auto-start
-            // If enabled, start the VPN service:
-            // val vpnIntent = Intent(context, GateKeeperVpnService::class.java).apply {
-            //     action = GateKeeperVpnService.ACTION_START
-            // }
-            // context.startForegroundService(vpnIntent)
+            runBlocking {
+                val prefs = context.dataStore.data.first()
+                if (prefs[SettingsRepository.AUTO_VPN_START] == true) {
+                    val vpnIntent = Intent(context, GateKeeperVpnService::class.java).apply {
+                        action = GateKeeperVpnService.ACTION_START
+                    }
+                    context.startForegroundService(vpnIntent)
+                }
+            }
         }
     }
 }

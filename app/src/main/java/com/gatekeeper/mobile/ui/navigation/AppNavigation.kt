@@ -27,10 +27,11 @@ import com.gatekeeper.mobile.ui.screens.settings.SettingsProtectionScreen
 import com.gatekeeper.mobile.ui.screens.settings.SettingsPrivacyScreen
 import com.gatekeeper.mobile.ui.screens.settings.SettingsAdvancedScreen
 import com.gatekeeper.mobile.ui.screens.settings.SettingsAboutScreen
+import com.gatekeeper.mobile.ui.screens.settings.LimitationsScreen
 import com.gatekeeper.mobile.ui.screens.traffic.TrafficScreen
 import com.gatekeeper.mobile.ui.screens.threats.ThreatFeedScreen
 import com.gatekeeper.mobile.ui.screens.permissionauditor.PermissionAuditorScreen
-import com.gatekeeper.mobile.ui.screens.permissionauditor.PrivacyDashboardScreen
+
 import com.gatekeeper.mobile.ui.screens.wifiscanner.WifiScannerScreen
 import com.gatekeeper.mobile.ui.screens.certaudit.CertAuditScreen
 import com.gatekeeper.mobile.ui.theme.*
@@ -62,10 +63,10 @@ fun AppNavigation(
     // VPN status for badge
     val isVpnActive by GateKeeperVpnService.isRunning.collectAsState()
 
-    Scaffold(
-        modifier = Modifier.glassAmbientBackground(),
-        containerColor = Color.Transparent,
-        bottomBar = {
+    AmbientBackground {
+        Scaffold(
+            containerColor = Color.Transparent,
+            bottomBar = {
             // ── Only show bottom nav on main 5 tabs ──────────────────────────
             AnimatedVisibility(
                 visible = showBottomBar,
@@ -81,16 +82,17 @@ fun AppNavigation(
                             .background(
                                 Brush.horizontalGradient(
                                     listOf(
-                                        DarkSurface,
-                                        GlassBorder.copy(alpha = 0.3f),
-                                        DarkSurface
+                                        LocalGKColors.current.surface,
+                                        LocalGKColors.current.border.copy(alpha = 0.3f),
+                                        LocalGKColors.current.surface
                                     )
                                 )
                             )
                     )
                     NavigationBar(
-                        containerColor = DarkSurface,
-                        tonalElevation = 0.dp
+                        containerColor = Color.Transparent,
+                        tonalElevation = 0.dp,
+                        modifier = Modifier.glassPanel()
                     ) {
                         Screen.bottomNavItems.forEach { screen ->
                             val selected = currentRoute == screen.route
@@ -102,7 +104,7 @@ fun AppNavigation(
                                             badge = {
                                                 if (isVpnActive) {
                                                     Badge(
-                                                        containerColor = StatusOnline,
+                                                        containerColor = LocalGKColors.current.statusOnline,
                                                         modifier = Modifier.size(8.dp)
                                                     )
                                                 }
@@ -139,11 +141,11 @@ fun AppNavigation(
                                     }
                                 },
                                 colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = PrimaryCyan,
-                                    selectedTextColor = PrimaryCyan,
-                                    unselectedIconColor = TextTertiary,
-                                    unselectedTextColor = TextTertiary,
-                                    indicatorColor = PrimaryCyan.copy(alpha = 0.10f)
+                                    selectedIconColor = LocalGKColors.current.primary,
+                                    selectedTextColor = LocalGKColors.current.primary,
+                                    unselectedIconColor = LocalGKColors.current.textTertiary,
+                                    unselectedTextColor = LocalGKColors.current.textTertiary,
+                                    indicatorColor = LocalGKColors.current.primary.copy(alpha = 0.10f)
                                 )
                             )
                         }
@@ -158,10 +160,24 @@ fun AppNavigation(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            enterTransition = { slideInHorizontally(initialOffsetX = { 60 }, animationSpec = tween(200)) + fadeIn(tween(180)) },
-            exitTransition = { slideOutHorizontally(targetOffsetX = { -60 }, animationSpec = tween(200)) + fadeOut(tween(150)) },
-            popEnterTransition = { slideInHorizontally(initialOffsetX = { -60 }, animationSpec = tween(200)) + fadeIn(tween(180)) },
-            popExitTransition = { slideOutHorizontally(targetOffsetX = { 60 }, animationSpec = tween(200)) + fadeOut(tween(150)) }
+            enterTransition = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(300))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Right,
+                    animationSpec = tween(300, easing = androidx.compose.animation.core.FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(300))
+            }
         ) {
             composable(Screen.Dashboard.route) { DashboardScreen(navController) }
             composable(Screen.Firewall.route) { FirewallScreen() }
@@ -173,9 +189,10 @@ fun AppNavigation(
             composable("settings/privacy") { SettingsPrivacyScreen(navController = navController) }
             composable("settings/advanced") { SettingsAdvancedScreen(navController = navController) }
             composable("settings/about") { SettingsAboutScreen(navController = navController) }
+            composable("limitations") { LimitationsScreen(navController = navController) }
             composable(Screen.ThreatFeed.route) { ThreatFeedScreen(navController = navController) }
             composable(Screen.PermissionAuditor.route) { PermissionAuditorScreen(navController = navController) }
-            composable("privacy_dashboard") { PrivacyDashboardScreen(navController = navController) }
+
             composable(Screen.WifiScanner.route) { WifiScannerScreen(navController = navController) }
             composable(Screen.CertAudit.route) { CertAuditScreen(navController = navController) }
             composable("onboarding") {
@@ -189,4 +206,5 @@ fun AppNavigation(
             }
         }
     }
-}
+} // end AmbientBackground
+} // end AppNavigation

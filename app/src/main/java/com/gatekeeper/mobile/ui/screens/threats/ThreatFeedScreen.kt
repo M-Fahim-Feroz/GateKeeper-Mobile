@@ -49,12 +49,12 @@ fun ThreatFeedScreen(
     }
 
     Scaffold(
-        containerColor = DarkBackground
+        containerColor = LocalGKColors.current.background
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(DarkBackground)
+                .background(LocalGKColors.current.background)
                 .padding(paddingValues),
             contentPadding = PaddingValues(bottom = 80.dp)
         ) {
@@ -63,13 +63,13 @@ fun ThreatFeedScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(Brush.verticalGradient(listOf(AccentRed.copy(alpha = 0.08f), DarkBackground)))
+                        .background(Brush.verticalGradient(listOf(LocalGKColors.current.accentRed.copy(alpha = 0.08f), LocalGKColors.current.background)))
                         .padding(horizontal = 20.dp, vertical = 16.dp)
                 ) {
                     // Back button for when navigated from Dashboard
                     if (navController != null) {
                         IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.ArrowBack, "Back", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                            Icon(Icons.Filled.ArrowBack, "Back", tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(20.dp))
                         }
                         Spacer(Modifier.height(4.dp))
                     }
@@ -79,15 +79,15 @@ fun ThreatFeedScreen(
                                 .background(Brush.linearGradient(GradientDanger.map { it.copy(alpha = 0.2f) })),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Filled.Security, null, tint = AccentRed, modifier = Modifier.size(22.dp))
+                            Icon(Icons.Filled.Security, null, tint = LocalGKColors.current.accentRed, modifier = Modifier.size(22.dp))
                         }
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("Threat Intelligence", style = MaterialTheme.typography.displaySmall, color = TextPrimary)
+                            Text("Threat Intelligence", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
                             Text(
                                 if (totalThreats > 0) "$totalThreats malicious indicators active" else "No feeds imported yet",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = TextSecondary
+                                color = LocalGKColors.current.textSecondary
                             )
                         }
                     }
@@ -109,7 +109,7 @@ fun ThreatFeedScreen(
                         TextButton(
                             onClick = { viewModel.clearAll() },
                             enabled = !isLoading,
-                            colors = ButtonDefaults.textButtonColors(contentColor = AccentRed)
+                            colors = ButtonDefaults.textButtonColors(contentColor = LocalGKColors.current.accentRed)
                         ) {
                             Icon(Icons.Filled.DeleteSweep, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(6.dp))
@@ -133,12 +133,12 @@ fun ThreatFeedScreen(
                     val sourceUrl = entries.first().feedSource
                     Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                         GKListRow(
-                            icon = Icons.Filled.CheckCircle, iconTint = AccentGreen,
+                            icon = Icons.Filled.CheckCircle, iconTint = LocalGKColors.current.accentGreen,
                             title = feedName,
                             subtitle = "${entries.size} indicators",
                             trailing = {
                                 IconButton(onClick = { viewModel.removeFeed(sourceUrl) }) {
-                                    Icon(Icons.Filled.DeleteOutline, null, tint = AccentRed)
+                                    Icon(Icons.Filled.DeleteOutline, "Remove Feed", tint = LocalGKColors.current.accentRed)
                                 }
                             }
                         )
@@ -158,10 +158,10 @@ fun ThreatFeedScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = PrimaryCyan, strokeWidth = 2.dp)
+                            CircularProgressIndicator(color = LocalGKColors.current.primary, strokeWidth = 2.dp)
                             Spacer(Modifier.height(12.dp))
-                            Text("Downloading & processing feed...", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                            Text("Large feeds may take 10–30 seconds.", color = TextTertiary, style = MaterialTheme.typography.bodySmall)
+                            Text("Downloading & processing feed...", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.bodyMedium)
+                            Text("Large feeds may take 10–30 seconds.", color = LocalGKColors.current.textTertiary, style = MaterialTheme.typography.bodySmall)
                         }
                     }
                 }
@@ -171,9 +171,9 @@ fun ThreatFeedScreen(
                         val isError = status?.contains("Failed") == true
                         val isSuccess = status?.contains("Successfully") == true || status?.contains("removed") == true
                         val color = when {
-                            isError -> AccentRed
-                            isSuccess -> AccentGreen
-                            else -> PrimaryCyan
+                            isError -> LocalGKColors.current.accentRed
+                            isSuccess -> LocalGKColors.current.accentGreen
+                            else -> LocalGKColors.current.primary
                         }
                         Box(
                             modifier = Modifier
@@ -202,15 +202,15 @@ fun ThreatFeedScreen(
                             value = customFeedUrl,
                             onValueChange = { customFeedUrl = it },
                             modifier = Modifier.weight(1f),
-                            placeholder = { Text("https://example.com/blocklist.txt", color = TextTertiary) },
+                            placeholder = { Text("https://example.com/blocklist.txt", color = LocalGKColors.current.textTertiary) },
                             shape = RoundedCornerShape(12.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = PrimaryCyan,
-                                unfocusedBorderColor = GlassBorder,
-                                focusedContainerColor = DarkCard,
-                                unfocusedContainerColor = DarkCard,
-                                focusedTextColor = TextPrimary,
-                                unfocusedTextColor = TextPrimary
+                                focusedBorderColor = LocalGKColors.current.primary,
+                                unfocusedBorderColor = LocalGKColors.current.border,
+                                focusedContainerColor = LocalGKColors.current.card,
+                                unfocusedContainerColor = LocalGKColors.current.card,
+                                focusedTextColor = LocalGKColors.current.textPrimary,
+                                unfocusedTextColor = LocalGKColors.current.textPrimary
                             ),
                             singleLine = true
                         )
@@ -239,10 +239,10 @@ fun ThreatFeedScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.size(54.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = PrimaryCyan,
-                                contentColor = DarkBackground,
-                                disabledContainerColor = DarkSurfaceVariant,
-                                disabledContentColor = TextTertiary
+                                containerColor = LocalGKColors.current.primary,
+                                contentColor = LocalGKColors.current.background,
+                                disabledContainerColor = LocalGKColors.current.surfaceVariant,
+                                disabledContentColor = LocalGKColors.current.textTertiary
                             )
                         ) {
                             Icon(Icons.Filled.Download, null)
@@ -261,14 +261,14 @@ fun ThreatFeedScreen(
                             enabled = !isLoading,
                             contentPadding = PaddingValues(0.dp)
                         ) {
-                            Text("Import All", color = PrimaryCyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                            Text("Import All", color = LocalGKColors.current.primary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(Modifier.height(2.dp))
                     Text(
                         "Tap any feed to import it. All feeds are free and updated regularly.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextTertiary
+                        color = LocalGKColors.current.textTertiary
                     )
                 }
             }
@@ -296,17 +296,17 @@ fun ThreatFeedCard(
     onImport: () -> Unit,
     onRemove: () -> Unit
 ) {
-    val borderColor = if (isImported) AccentGreen.copy(alpha = 0.4f) else GlassBorder
-    val bgColor = if (isImported) AccentGreen.copy(alpha = 0.05f) else DarkCard
+    val borderColor = if (isImported) LocalGKColors.current.accentGreen.copy(alpha = 0.4f) else LocalGKColors.current.border
+    val bgColor = if (isImported) LocalGKColors.current.accentGreen.copy(alpha = 0.05f) else LocalGKColors.current.card
 
     val (typeIcon, typeColor) = when (feed.threatType) {
-        "malware-c2" -> Icons.Filled.BugReport to AccentRed
-        "malware"    -> Icons.Filled.Warning to AccentRed
-        "phishing"   -> Icons.Filled.Report to AccentOrange
+        "malware-c2" -> Icons.Filled.BugReport to LocalGKColors.current.accentRed
+        "malware"    -> Icons.Filled.Warning to LocalGKColors.current.accentRed
+        "phishing"   -> Icons.Filled.Report to LocalGKColors.current.accentOrange
         "ads-tracking" -> Icons.Filled.Block to SecondaryPurple
-        "cryptominer" -> Icons.Filled.ElectricBolt to AccentYellow
-        "ransomware" -> Icons.Filled.Lock to AccentRed
-        else          -> Icons.Filled.Security to PrimaryCyan
+        "cryptominer" -> Icons.Filled.ElectricBolt to LocalGKColors.current.accentYellow
+        "ransomware" -> Icons.Filled.Lock to LocalGKColors.current.accentRed
+        else          -> Icons.Filled.Security to LocalGKColors.current.primary
     }
 
     Row(
@@ -341,19 +341,19 @@ fun ThreatFeedCard(
                 Text(
                     feed.name,
                     style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary,
+                    color = LocalGKColors.current.textPrimary,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1
                 )
                 if (isImported) {
                     Spacer(Modifier.width(6.dp))
-                    Icon(Icons.Filled.CheckCircle, null, tint = AccentGreen, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Filled.CheckCircle, null, tint = LocalGKColors.current.accentGreen, modifier = Modifier.size(14.dp))
                 }
             }
             Text(
                 feed.description,
                 style = MaterialTheme.typography.bodySmall,
-                color = TextTertiary,
+                color = LocalGKColors.current.textTertiary,
                 maxLines = 2
             )
             Spacer(Modifier.height(2.dp))
@@ -381,7 +381,7 @@ fun ThreatFeedCard(
                 enabled = !isLoading,
                 modifier = Modifier.size(36.dp)
             ) {
-                Icon(Icons.Filled.DeleteOutline, "Remove", tint = AccentRed, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.DeleteOutline, "Remove", tint = LocalGKColors.current.accentRed, modifier = Modifier.size(18.dp))
             }
         } else {
             FilledTonalButton(
@@ -390,8 +390,8 @@ fun ThreatFeedCard(
                 modifier = Modifier.height(34.dp),
                 contentPadding = PaddingValues(horizontal = 12.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = AccentRed.copy(alpha = 0.15f),
-                    contentColor = AccentRed
+                    containerColor = LocalGKColors.current.accentRed.copy(alpha = 0.15f),
+                    contentColor = LocalGKColors.current.accentRed
                 )
             ) {
                 Icon(Icons.Filled.Download, null, modifier = Modifier.size(14.dp))

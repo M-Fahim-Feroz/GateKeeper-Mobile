@@ -60,7 +60,7 @@ sealed class Screen(
     )
     data object PermissionAuditor : Screen(
         route = "permission_auditor",
-        title = "Permission Auditor",
+        title = "Device Audit",
         icon = Icons.Outlined.VerifiedUser,
         iconSelected = Icons.Filled.VerifiedUser
     )

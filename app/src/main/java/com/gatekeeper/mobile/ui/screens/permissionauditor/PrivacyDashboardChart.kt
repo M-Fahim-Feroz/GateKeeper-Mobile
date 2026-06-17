@@ -28,10 +28,10 @@ fun PrivacyDashboardChart(logs: List<SensorLog>) {
 
     if (totalCount == 0) {
         Box(
-            modifier = Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(14.dp)).background(DarkCard),
+            modifier = Modifier.fillMaxWidth().height(160.dp).clip(RoundedCornerShape(14.dp)).background(LocalGKColors.current.card),
             contentAlignment = Alignment.Center
         ) {
-            Text("No sensor activity in the past 24 hours.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+            Text("No sensor activity in the past 24 hours.", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.bodyMedium)
         }
         return
     }
@@ -40,11 +40,15 @@ fun PrivacyDashboardChart(logs: List<SensorLog>) {
     val micSweep = (micCount.toFloat() / totalCount) * 360f
     val locationSweep = (locationCount.toFloat() / totalCount) * 360f
 
+    val accentRed = LocalGKColors.current.accentRed
+    val accentOrange = LocalGKColors.current.accentOrange
+    val accentYellow = LocalGKColors.current.accentYellow
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
             .padding(24.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -56,7 +60,7 @@ fun PrivacyDashboardChart(logs: List<SensorLog>) {
                 // Draw Camera
                 if (cameraCount > 0) {
                     drawArc(
-                        color = AccentRed,
+                        color = accentRed,
                         startAngle = startAngle,
                         sweepAngle = cameraSweep - 2f,
                         useCenter = false,
@@ -68,7 +72,7 @@ fun PrivacyDashboardChart(logs: List<SensorLog>) {
                 // Draw Mic
                 if (micCount > 0) {
                     drawArc(
-                        color = AccentOrange,
+                        color = accentOrange,
                         startAngle = startAngle,
                         sweepAngle = micSweep - 2f,
                         useCenter = false,
@@ -80,7 +84,7 @@ fun PrivacyDashboardChart(logs: List<SensorLog>) {
                 // Draw Location
                 if (locationCount > 0) {
                     drawArc(
-                        color = AccentYellow,
+                        color = accentYellow,
                         startAngle = startAngle,
                         sweepAngle = locationSweep - 2f,
                         useCenter = false,
@@ -89,8 +93,8 @@ fun PrivacyDashboardChart(logs: List<SensorLog>) {
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Past", style = MaterialTheme.typography.labelSmall, color = TextSecondary)
-                Text("24 hours", style = MaterialTheme.typography.labelMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text("Past", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textSecondary)
+                Text("24 hours", style = MaterialTheme.typography.labelMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
             }
         }
         
@@ -99,23 +103,23 @@ fun PrivacyDashboardChart(logs: List<SensorLog>) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (cameraCount > 0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(AccentRed))
+                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(LocalGKColors.current.accentRed))
                     Spacer(Modifier.width(8.dp))
-                    Text("Camera", color = TextPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Camera", color = LocalGKColors.current.textPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 }
             }
             if (micCount > 0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(AccentOrange))
+                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(LocalGKColors.current.accentOrange))
                     Spacer(Modifier.width(8.dp))
-                    Text("Microphone", color = TextPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Microphone", color = LocalGKColors.current.textPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 }
             }
             if (locationCount > 0) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(AccentYellow))
+                    Box(modifier = Modifier.size(10.dp).clip(CircleShape).background(LocalGKColors.current.accentYellow))
                     Spacer(Modifier.width(8.dp))
-                    Text("Location", color = TextPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                    Text("Location", color = LocalGKColors.current.textPrimary, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
                 }
             }
         }

@@ -23,6 +23,9 @@ class SettingsViewModel @Inject constructor(
     val isPcapCaptureEnabled: StateFlow<Boolean> = settingsRepository.capturePcapFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val themeMode: StateFlow<Int> = settingsRepository.themeModeFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
     val backendIp: StateFlow<String> = settingsRepository.backendIpFlow
         .map { it ?: "" }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "")
@@ -52,6 +55,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     fun setPcapCaptureEnabled(enabled: Boolean) = viewModelScope.launch { settingsRepository.setCapturePcap(enabled) }
+    fun setThemeMode(mode: Int) = viewModelScope.launch { settingsRepository.setThemeMode(mode) }
     fun setBackendIp(ip: String) = viewModelScope.launch { settingsRepository.setBackendIp(ip) }
     fun setDnsLeakProtection(enabled: Boolean) = viewModelScope.launch { settingsRepository.setDnsLeakProtection(enabled) }
     fun setDnsExfilDetection(enabled: Boolean) = viewModelScope.launch { settingsRepository.setDnsExfilDetection(enabled) }

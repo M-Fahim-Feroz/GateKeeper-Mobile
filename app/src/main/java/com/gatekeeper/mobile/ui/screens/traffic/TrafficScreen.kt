@@ -44,18 +44,15 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
     val blockedCount = remember(connections) { connections.count { it.wasBlocked && !it.isSystemEvent } }
     val allowedCount = remember(connections) { connections.count { !it.wasBlocked && !it.isSystemEvent } }
 
-    val bandwidthUsage by viewModel.bandwidthUsage.collectAsState(initial = emptyMap())
-
     var selectedLog by remember { mutableStateOf<ConnectionLog?>(null) }
-    var selectedTab by remember { mutableStateOf(0) } // 0 = Connections, 1 = Data Usage
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
+    Column(modifier = Modifier.fillMaxSize().background(LocalGKColors.current.background)) {
         // ── Header ──────────────────────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(AccentGreen.copy(alpha = 0.08f), DarkBackground)))
+                .background(Brush.verticalGradient(listOf(LocalGKColors.current.accentGreen.copy(alpha = 0.08f), LocalGKColors.current.background)))
                 .padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -64,12 +61,12 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                         .background(Brush.linearGradient(GradientSuccess.map { it.copy(alpha = 0.2f) })),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.NetworkCheck, null, tint = AccentGreen, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Filled.NetworkCheck, null, tint = LocalGKColors.current.accentGreen, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Traffic Monitor", style = MaterialTheme.typography.displaySmall, color = TextPrimary)
-                    Text("Network connection log · last $timeRange", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("Traffic Monitor", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
+                    Text("Network connection log · last $timeRange", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
                 }
             }
 
@@ -82,42 +79,42 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(AccentRed.copy(alpha = 0.08f))
+                        .background(LocalGKColors.current.accentRed.copy(alpha = 0.08f))
                         .padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(Icons.Filled.Block, null, tint = AccentRed, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Block, null, tint = LocalGKColors.current.accentRed, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.height(4.dp))
-                    Text("$blockedCount", style = MaterialTheme.typography.titleLarge, color = AccentRed, fontWeight = FontWeight.Bold)
-                    Text("Blocked", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                    Text("$blockedCount", style = MaterialTheme.typography.titleLarge, color = LocalGKColors.current.accentRed, fontWeight = FontWeight.Bold)
+                    Text("Blocked", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
                 }
                 // Allowed stat — green
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(AccentGreen.copy(alpha = 0.08f))
+                        .background(LocalGKColors.current.accentGreen.copy(alpha = 0.08f))
                         .padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(Icons.Filled.CheckCircle, null, tint = AccentGreen, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.CheckCircle, null, tint = LocalGKColors.current.accentGreen, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.height(4.dp))
-                    Text("$allowedCount", style = MaterialTheme.typography.titleLarge, color = AccentGreen, fontWeight = FontWeight.Bold)
-                    Text("Allowed", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                    Text("$allowedCount", style = MaterialTheme.typography.titleLarge, color = LocalGKColors.current.accentGreen, fontWeight = FontWeight.Bold)
+                    Text("Allowed", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
                 }
                 // Total stat — cyan
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(10.dp))
-                        .background(PrimaryCyan.copy(alpha = 0.06f))
+                        .background(LocalGKColors.current.primary.copy(alpha = 0.06f))
                         .padding(12.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Icon(Icons.Filled.Storage, null, tint = PrimaryCyan, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Storage, null, tint = LocalGKColors.current.primary, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.height(4.dp))
-                    Text("$totalCount", style = MaterialTheme.typography.titleLarge, color = PrimaryCyan, fontWeight = FontWeight.Bold)
-                    Text("Total ever", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                    Text("$totalCount", style = MaterialTheme.typography.titleLarge, color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
+                    Text("Total ever", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
                 }
             }
 
@@ -131,65 +128,36 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
             )
             Spacer(Modifier.height(16.dp))
 
-            // Mode toggle chips
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    label = { Text("Connections") },
-                    leadingIcon = { @Suppress("DEPRECATION") Icon(Icons.Filled.List, null, modifier = Modifier.size(16.dp)) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PrimaryCyan.copy(alpha = 0.15f),
-                        selectedLabelColor = PrimaryCyan
-                    )
-                )
-                FilterChip(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    label = { Text("Data Usage") },
-                    leadingIcon = { Icon(Icons.Filled.DataUsage, null, modifier = Modifier.size(16.dp)) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AccentOrange.copy(alpha = 0.15f),
-                        selectedLabelColor = AccentOrange
-                    )
-                )
-            }
-            
-            if (selectedTab == 0) {
-                Spacer(Modifier.height(12.dp))
-                // Status filter (only for connections tab)
-                GKFilterChips(
-                    options = listOf("All", "Blocked", "Allowed", "System"),
-                    selected = filterMode,
-                    onSelect = { viewModel.setFilterMode(it) }
-                )
-            }
+            // Status filter
+            GKFilterChips(
+                options = listOf("All", "Blocked", "Allowed", "System"),
+                selected = filterMode,
+                onSelect = { viewModel.setFilterMode(it) }
+            )
         }
-
-        if (selectedTab == 0) {
             // ── Legend ────────────────────────────────────────────────────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(DarkSurface)
+                    .background(LocalGKColors.current.surface)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(AccentRed))
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(LocalGKColors.current.accentRed))
                     Spacer(Modifier.width(4.dp))
-                    Text("Blocked by firewall/DNS", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                    Text("Blocked by firewall/DNS", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(AccentGreen))
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(LocalGKColors.current.accentGreen))
                     Spacer(Modifier.width(4.dp))
-                    Text("Allowed", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                    Text("Allowed", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(PrimaryCyan))
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(LocalGKColors.current.primary))
                     Spacer(Modifier.width(4.dp))
-                    Text("System", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                    Text("System", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
                 }
             }
 
@@ -197,9 +165,9 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
             if (connections.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-                        Icon(Icons.Outlined.CloudOff, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
+                        Icon(Icons.Outlined.CloudOff, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(52.dp))
                         Spacer(Modifier.height(12.dp))
-                        Text("No connections recorded", color = TextSecondary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                        Text("No connections recorded", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                         Spacer(Modifier.height(6.dp))
                         Text(
                             when (filterMode) {
@@ -208,7 +176,7 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                                 "System" -> "No VPN state change events recorded."
                                 else -> "Enable the VPN to start monitoring network traffic."
                             },
-                            color = TextTertiary,
+                            color = LocalGKColors.current.textTertiary,
                             style = MaterialTheme.typography.bodySmall,
                             textAlign = androidx.compose.ui.text.style.TextAlign.Center
                         )
@@ -223,7 +191,7 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                         Text(
                             "${connections.size} connection${if (connections.size != 1) "s" else ""} · $timeRange",
                             style = MaterialTheme.typography.labelSmall,
-                            color = TextTertiary,
+                            color = LocalGKColors.current.textTertiary,
                             modifier = Modifier.padding(bottom = 6.dp)
                         )
                     }
@@ -233,45 +201,7 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                     item { Spacer(Modifier.height(80.dp)) }
                 }
             }
-        } else {
-            // ── Data Usage View ──────────────────────────────────────────────
-            val usageList = bandwidthUsage.values.sortedByDescending { it.bytesIn + it.bytesOut }
-            if (usageList.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-                        Icon(Icons.Outlined.DataUsage, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
-                        Spacer(Modifier.height(12.dp))
-                        Text("No data usage recorded", color = TextSecondary, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "Enable the VPN and use your apps to see real-time bandwidth usage statistics.",
-                            color = TextTertiary,
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
-                    }
-                }
-            } else {
-                LazyColumn(
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    item {
-                        Text(
-                            "Real-time bandwidth since VPN started",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextTertiary,
-                            modifier = Modifier.padding(bottom = 6.dp)
-                        )
-                    }
-                    items(usageList, key = { it.packageName }) { usage ->
-                        DataUsageItem(usage)
-                    }
-                    item { Spacer(Modifier.height(80.dp)) }
-                }
-            }
         }
-    }
 
     // ── Detail Sheet ──────────────────────────────────────────────────────
     if (selectedLog != null) {
@@ -279,14 +209,14 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
         ModalBottomSheet(
             onDismissRequest = { selectedLog = null },
             sheetState = sheetState,
-            containerColor = DarkSurface
+            containerColor = LocalGKColors.current.surface
         ) {
             Column(modifier = Modifier.padding(horizontal = 24.dp).padding(bottom = 32.dp).fillMaxWidth()) {
                 // Sheet header
                 val accentColor = when {
-                    log.isSystemEvent -> PrimaryCyan
-                    log.wasBlocked -> AccentRed
-                    else -> AccentGreen
+                    log.isSystemEvent -> LocalGKColors.current.primary
+                    log.wasBlocked -> LocalGKColors.current.accentRed
+                    else -> LocalGKColors.current.accentGreen
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(
@@ -305,7 +235,7 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                     Column {
                         Text(
                             if (log.isSystemEvent) "System Event" else log.appName ?: "Unknown App",
-                            style = MaterialTheme.typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold
+                            style = MaterialTheme.typography.titleLarge, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold
                         )
                         Box(
                             modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(accentColor.copy(alpha = 0.15f))
@@ -324,7 +254,7 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                 }
 
                 Spacer(Modifier.height(20.dp))
-                HorizontalDivider(color = BorderDefault)
+                HorizontalDivider(color = LocalGKColors.current.border)
                 Spacer(Modifier.height(16.dp))
 
                 if (log.isSystemEvent) {
@@ -353,11 +283,11 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                                 selectedLog = null
                             },
                             modifier = Modifier.weight(1f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderDefault)
+                            border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.border)
                         ) {
-                            Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(14.dp), tint = TextSecondary)
+                            Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(14.dp), tint = LocalGKColors.current.textSecondary)
                             Spacer(Modifier.width(6.dp))
-                            Text("Copy IP", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                            Text("Copy IP", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.labelMedium)
                         }
                         if (log.remoteHostname != null) {
                             OutlinedButton(
@@ -367,11 +297,11 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
                                     selectedLog = null
                                 },
                                 modifier = Modifier.weight(1f),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderDefault)
+                                border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.border)
                             ) {
-                                Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(14.dp), tint = TextSecondary)
+                                Icon(Icons.Filled.ContentCopy, null, modifier = Modifier.size(14.dp), tint = LocalGKColors.current.textSecondary)
                                 Spacer(Modifier.width(6.dp))
-                                Text("Copy Host", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                                Text("Copy Host", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.labelMedium)
                             }
                         }
                     }
@@ -380,15 +310,14 @@ fun TrafficScreen(viewModel: TrafficViewModel = hiltViewModel()) {
         }
     }
 }
-
 @Composable
 private fun DetailRow(label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.Top) {
-        Icon(icon, null, tint = TextTertiary, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+        Icon(icon, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(16.dp).padding(top = 2.dp))
         Spacer(Modifier.width(10.dp))
         Column {
-            Text(label, style = MaterialTheme.typography.labelSmall, color = TextTertiary)
-            Text(value, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
+            Text(value, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textPrimary)
         }
     }
 }
@@ -405,16 +334,16 @@ fun ConnectionLogItem(log: ConnectionLog, onClick: () -> Unit) {
     val isBlocked = log.wasBlocked
     val isSystem = log.isSystemEvent
     val accentColor = when {
-        isSystem -> PrimaryCyan
-        isBlocked -> AccentRed
-        else -> AccentGreen
+        isSystem -> LocalGKColors.current.primary
+        isBlocked -> LocalGKColors.current.accentRed
+        else -> LocalGKColors.current.accentGreen
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
             .combinedClickable(onClick = onClick)
     ) {
         // Colored left border indicating status
@@ -450,22 +379,22 @@ fun ConnectionLogItem(log: ConnectionLog, onClick: () -> Unit) {
                         text = log.systemEventReason ?: "System Event",
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary,
+                        color = LocalGKColors.current.textPrimary,
                         maxLines = 1
                     )
-                    Text("VPN / GateKeeper", color = TextTertiary, style = MaterialTheme.typography.labelSmall)
+                    Text("VPN / GateKeeper", color = LocalGKColors.current.textTertiary, style = MaterialTheme.typography.labelSmall)
                 } else {
                     Text(
                         text = log.remoteHostname ?: log.remoteIp,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = TextPrimary,
+                        color = LocalGKColors.current.textPrimary,
                         maxLines = 1
                     )
                     Text(
                         text = "${log.appName ?: log.packageName} · ${log.protocol}",
                         style = MaterialTheme.typography.labelSmall,
-                        color = TextTertiary,
+                        color = LocalGKColors.current.textTertiary,
                         maxLines = 1
                     )
                 }
@@ -479,7 +408,7 @@ fun ConnectionLogItem(log: ConnectionLog, onClick: () -> Unit) {
                 Text(
                     format.format(Date(log.timestamp)),
                     style = MaterialTheme.typography.labelSmall,
-                    color = TextTertiary
+                    color = LocalGKColors.current.textTertiary
                 )
                 Spacer(Modifier.height(4.dp))
                 Box(
@@ -504,75 +433,4 @@ fun ConnectionLogItem(log: ConnectionLog, onClick: () -> Unit) {
     }
 }
 
-@Composable
-fun DataUsageItem(usage: com.gatekeeper.mobile.vpn.AppBandwidth) {
-    val context = LocalContext.current
-    val pm = context.packageManager
-    var appName by remember { mutableStateOf(usage.packageName) }
-    var appIcon by remember { mutableStateOf<android.graphics.drawable.Drawable?>(null) }
 
-    LaunchedEffect(usage.packageName) {
-        try {
-            val appInfo = pm.getApplicationInfo(usage.packageName, 0)
-            appName = pm.getApplicationLabel(appInfo).toString()
-            appIcon = pm.getApplicationIcon(appInfo)
-        } catch (e: Exception) {
-            // keep package name
-        }
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(DarkCard)
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // App icon
-        Box(
-            modifier = Modifier.size(42.dp).clip(RoundedCornerShape(10.dp))
-                .background(AccentOrange.copy(alpha = 0.10f)),
-            contentAlignment = Alignment.Center
-        ) {
-            if (appIcon != null) {
-                coil.compose.AsyncImage(model = appIcon, contentDescription = appName, modifier = Modifier.size(28.dp))
-            } else {
-                Icon(Icons.Filled.Apps, null, tint = AccentOrange, modifier = Modifier.size(24.dp))
-            }
-        }
-
-        Spacer(Modifier.width(14.dp))
-
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                appName,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary,
-                maxLines = 1
-            )
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.ArrowDownward, null, tint = AccentGreen, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(formatBytes(usage.bytesIn), color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-                
-                Spacer(Modifier.width(12.dp))
-                
-                Icon(Icons.Filled.ArrowUpward, null, tint = PrimaryCyan, modifier = Modifier.size(14.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(formatBytes(usage.bytesOut), color = TextSecondary, style = MaterialTheme.typography.bodySmall)
-            }
-        }
-
-        // Total
-        val total = usage.bytesIn + usage.bytesOut
-        Text(
-            formatBytes(total),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = AccentOrange
-        )
-    }
-}

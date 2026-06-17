@@ -36,6 +36,7 @@ class SettingsRepository @Inject constructor(
         val ONBOARDING_DONE          = booleanPreferencesKey("onboarding_done")
         val AUTO_VPN_START           = booleanPreferencesKey("auto_vpn_start") // VPN on by default
         val SAFE_SEARCH_ENABLED      = booleanPreferencesKey("safe_search_enabled") // Force SafeSearch
+        val THEME_MODE               = androidx.datastore.preferences.core.intPreferencesKey("theme_mode") // 0: System, 1: Light, 2: Dark
     }
 
     val capturePcapFlow: Flow<Boolean> = dataStore.data.map { it[CAPTURE_PCAP] ?: false }
@@ -51,6 +52,7 @@ class SettingsRepository @Inject constructor(
     val onboardingDoneFlow: Flow<Boolean> = dataStore.data.map { it[ONBOARDING_DONE] ?: false }
     val autoVpnStartFlow: Flow<Boolean> = dataStore.data.map { it[AUTO_VPN_START] ?: true }
     val safeSearchEnabledFlow: Flow<Boolean> = dataStore.data.map { it[SAFE_SEARCH_ENABLED] ?: false }
+    val themeModeFlow: Flow<Int> = dataStore.data.map { it[THEME_MODE] ?: 0 }
 
     suspend fun setOnboardingDone() = dataStore.edit { it[ONBOARDING_DONE] = true }
     suspend fun setCapturePcap(enabled: Boolean) = dataStore.edit { it[CAPTURE_PCAP] = enabled }
@@ -65,4 +67,5 @@ class SettingsRepository @Inject constructor(
     suspend fun setGlobalCameraBlock(enabled: Boolean) = dataStore.edit { it[GLOBAL_CAMERA_BLOCK] = enabled }
     suspend fun setAutoVpnStart(enabled: Boolean) = dataStore.edit { it[AUTO_VPN_START] = enabled }
     suspend fun setSafeSearchEnabled(enabled: Boolean) = dataStore.edit { it[SAFE_SEARCH_ENABLED] = enabled }
+    suspend fun setThemeMode(mode: Int) = dataStore.edit { it[THEME_MODE] = mode }
 }

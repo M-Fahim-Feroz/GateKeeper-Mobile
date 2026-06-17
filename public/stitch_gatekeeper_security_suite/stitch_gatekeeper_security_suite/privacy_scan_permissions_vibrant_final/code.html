@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GateKeeper - Privacy Scan</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+  tailwind.config = {
+    darkMode: "class",
+    theme: {
+      extend: {
+        "colors": {
+                "surface-dim": "#10141a",
+                "on-secondary-fixed-variant": "#4f00d0",
+                "primary-fixed": "#b4ebff",
+                "secondary-container": "#5203d5",
+                "primary": "#a8e8ff",
+                "on-tertiary": "#003912",
+                "inverse-on-surface": "#2d3137",
+                "on-surface-variant": "#bbc9cf",
+                "outline": "#859398",
+                "surface-container-high": "#262a31",
+                "error-container": "#93000a",
+                "surface-bright": "#353940",
+                "on-tertiary-fixed": "#002108",
+                "surface-container-lowest": "#0a0e14",
+                "secondary-fixed": "#e8deff",
+                "surface-container": "#1c2026",
+                "on-primary-fixed": "#001f27",
+                "surface-container-low": "#181c22",
+                "on-primary-container": "#00586b",
+                "on-error-container": "#ffdad6",
+                "inverse-primary": "#00677e",
+                "surface-tint": "#3cd7ff",
+                "surface-variant": "#31353c",
+                "on-background": "#dfe2eb",
+                "secondary-fixed-dim": "#cdbdff",
+                "secondary": "#cdbdff",
+                "background": "#05070A",
+                "surface-container-highest": "#31353c",
+                "on-secondary-container": "#c0acff",
+                "on-primary": "#003642",
+                "inverse-surface": "#dfe2eb",
+                "error": "#ffb4ab",
+                "primary-fixed-dim": "#3cd7ff",
+                "tertiary-fixed": "#69ff87",
+                "primary-container": "#00d4ff",
+                "on-secondary": "#370096",
+                "on-tertiary-container": "#005d23",
+                "outline-variant": "#3c494e",
+                "surface": "#10141a",
+                "tertiary-container": "#37df66",
+                "tertiary": "#5bfc80",
+                "on-error": "#690005",
+                "on-tertiary-fixed-variant": "#00531e",
+                "on-surface": "#dfe2eb",
+                "on-secondary-fixed": "#20005f",
+                "tertiary-fixed-dim": "#3ce36a",
+                "on-primary-fixed-variant": "#004e5f",
+                "risk-critical": "#ff4d4d",
+                "risk-high": "#ff9900",
+                "risk-medium": "#ffcc00",
+                "risk-low": "#3399ff",
+                "privacy-accent": "#00d4ff"
+        },
+        "borderRadius": {
+                "DEFAULT": "0.25rem",
+                "lg": "0.5rem",
+                "xl": "0.75rem",
+                "full": "9999px",
+                "glass": "16px"
+        },
+        "spacing": {
+                "safe-area-bottom": "32px",
+                "grid-gutter": "12px",
+                "stack-gap": "16px",
+                "container-margin": "20px",
+                "inner-padding": "24px"
+        },
+        "fontFamily": {
+                "title-lg": [
+                        "Inter"
+                ],
+                "label-caps": [
+                        "Inter"
+                ],
+                "headline-lg": [
+                        "Inter"
+                ],
+                "headline-md": [
+                        "Inter"
+                ],
+                "body-md": [
+                        "Inter"
+                ],
+                "headline-lg-mobile": [
+                        "Inter"
+                ],
+                "body-sm": [
+                        "Inter"
+                ]
+        },
+        "fontSize": {
+                "title-lg": [
+                        "20px",
+                        {
+                                "lineHeight": "28px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "label-caps": [
+                        "12px",
+                        {
+                                "lineHeight": "16px",
+                                "letterSpacing": "0.05em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "headline-lg": [
+                        "32px",
+                        {
+                                "lineHeight": "40px",
+                                "letterSpacing": "-0.02em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "headline-md": [
+                        "24px",
+                        {
+                                "lineHeight": "32px",
+                                "fontWeight": "600"
+                        }
+                ],
+                "body-md": [
+                        "16px",
+                        {
+                                "lineHeight": "24px",
+                                "fontWeight": "500"
+                        }
+                ],
+                "headline-lg-mobile": [
+                        "28px",
+                        {
+                                "lineHeight": "34px",
+                                "letterSpacing": "-0.01em",
+                                "fontWeight": "700"
+                        }
+                ],
+                "body-sm": [
+                        "14px",
+                        {
+                                "lineHeight": "20px",
+                                "fontWeight": "400"
+                        }
+                ]
+        }
+},
+    },
+  }
+</script>
+<style>
+        body {
+            background-color: theme('colors.background');
+            background-image: radial-gradient(circle at top right, rgba(0, 212, 255, 0.08) 0%, transparent 40%),
+                              radial-gradient(circle at bottom left, rgba(55, 223, 102, 0.05) 0%, transparent 40%);
+            color: theme('colors.on-background');
+            min-height: 100vh;
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-top-color: rgba(255, 255, 255, 0.12);
+            border-left-color: rgba(255, 255, 255, 0.12);
+            border-radius: theme('borderRadius.glass');
+        }
+
+        .shimmer-effect {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .shimmer-effect::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 50%;
+            height: 100%;
+            background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.05), transparent);
+            animation: shimmer 4s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { left: -100%; }
+            100% { left: 200%; }
+        }
+
+        .list-item-divider {
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .list-item-divider:last-child {
+            border-bottom: none;
+        }
+
+        .risk-glow-critical { box-shadow: 0 0 15px rgba(255, 77, 77, 0.3); }
+        .risk-glow-high { box-shadow: 0 0 15px rgba(255, 153, 0, 0.3); }
+        .risk-glow-medium { box-shadow: 0 0 15px rgba(255, 204, 0, 0.3); }
+        .risk-glow-low { box-shadow: 0 0 15px rgba(51, 153, 255, 0.3); }
+    </style>
+</head>
+<body class="antialiased pb-safe-area-bottom pt-20 bg-background text-on-surface">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-container-margin h-16 bg-background/80 backdrop-blur-2xl text-privacy-accent font-headline-md text-headline-md-mobile border-b border-white/5">
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:opacity-80 transition-opacity active:scale-95 text-privacy-accent">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<span class="font-headline-md text-headline-md-mobile font-bold tracking-tight text-privacy-accent">App Permissions</span>
+<button class="flex items-center justify-center w-10 h-10 rounded-full hover:opacity-80 transition-opacity active:scale-95 text-privacy-accent">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">filter_list</span>
+</button>
+</header>
+<main class="px-container-margin mt-stack-gap max-w-3xl mx-auto">
+<!-- Header Section -->
+<div class="mb-6 flex items-center justify-between">
+<div>
+<h1 class="font-title-lg text-title-lg text-on-surface mb-1">Privacy Scan Results</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant">42 Apps Scanned • 5 Require Attention</p>
+</div>
+<div class="w-12 h-12 rounded-full bg-privacy-accent/10 flex items-center justify-center border border-privacy-accent/20 shadow-[0_0_15px_rgba(0,212,255,0.2)]">
+<span class="material-symbols-outlined text-privacy-accent" style="font-variation-settings: 'FILL' 1;">security</span>
+</div>
+</div>
+<!-- App List Container -->
+<div class="glass-card shimmer-effect overflow-hidden bg-surface-container-low/40">
+<!-- CRITICAL RISK APP -->
+<div class="list-item-divider p-inner-padding hover:bg-white/5 transition-colors group">
+<div class="flex items-start gap-4">
+<img alt="App Icon" class="w-12 h-12 rounded-xl object-cover border border-white/10 shadow-lg" data-alt="A futuristic app icon showing a stylized eye in neon cyan and magenta colors against a dark background, indicating social media or photo sharing. High tech, glossy finish." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAsoPot134H4fgQPOGD11FpLO5wRRL0ezkJRC9XGqGampxEiOoAnRUWcPaJBlOdiDBEKVB03VPMBirXp2eV0PWrLuiv3AiRzSG6tFjyXYt9vpFbeRyyR5ca5dsNyd_g7hxgYLVx-Va9RAIADL1RMb9xIse20cDwZkJOZr6uoyyzQC2BgEppMKD8LKNgCnS565jOnuQRYkgOeiT2kgQcTrR9llqVv7pYC6H2aHs0haoiXSxm-vMRjk8Xbdad9PX9-RBiAk-LCPe3Nyau"/>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-2">
+<h2 class="font-title-lg text-title-lg text-on-surface group-hover:text-privacy-accent transition-colors">SocialConnect</h2>
+<div class="flex items-center gap-1">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-risk-critical/10 text-risk-critical border border-risk-critical/30 risk-glow-critical backdrop-blur-md">Critical Risk</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[16px] cursor-help hover:text-white transition-colors" title="Critical Risk: Immediate action required">info</span>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-3">Excessive background data collection detected.</p>
+<div class="flex flex-wrap gap-2">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container/50 border border-white/5">
+<span class="material-symbols-outlined text-[14px] text-risk-critical" style="font-variation-settings: 'FILL' 1;">mic</span>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Microphone</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container/50 border border-white/5">
+<span class="material-symbols-outlined text-[14px] text-risk-critical" style="font-variation-settings: 'FILL' 1;">photo_camera</span>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Camera</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container/50 border border-white/5">
+<span class="material-symbols-outlined text-[14px] text-risk-critical" style="font-variation-settings: 'FILL' 1;">location_on</span>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Location (Always)</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- HIGH RISK APP -->
+<div class="list-item-divider p-inner-padding hover:bg-white/5 transition-colors group">
+<div class="flex items-start gap-4">
+<img alt="App Icon" class="w-12 h-12 rounded-xl object-cover border border-white/10 shadow-lg" data-alt="A minimalist game icon featuring a glowing 3D cube with neon orange edges on a dark slate background. Cyberpunk aesthetic, clean lines." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBvcKPy7LPrvnKFy_2iLYixiglNZMtdUw5CRjavuXgYFICC9Nur5AL7m7qsWzwEFj7ewBeczYbyz1Ixx8ceGGJPvkmR1o5zwO1v4xPVbvm2WJbRaclcKuE3KM1crxOMZKrFDw3Q2m0jdn94lk_wYU4gthqZjCUDG62QOwCsTQnHFCDe2Z5QWaK0bEC6pgSDlNqcLv2C68OwMhnhg8TXRnUBibeEl5H1xOOea43ZJO3aEaYJrLsZj38jxdUV4w_fopefYwGgJ683CT75"/>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-2">
+<h2 class="font-title-lg text-title-lg text-on-surface group-hover:text-privacy-accent transition-colors">CubeRunner 3D</h2>
+<div class="flex items-center gap-1">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-risk-high/10 text-risk-high border border-risk-high/30 risk-glow-high backdrop-blur-md">High Risk</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[16px] cursor-help hover:text-white transition-colors" title="High Risk: Review recommended">info</span>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-3">Unnecessary permissions for a game.</p>
+<div class="flex flex-wrap gap-2">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container/50 border border-white/5">
+<span class="material-symbols-outlined text-[14px] text-risk-high" style="font-variation-settings: 'FILL' 1;">contacts</span>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Contacts</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container/50 border border-white/5">
+<span class="material-symbols-outlined text-[14px] text-risk-high" style="font-variation-settings: 'FILL' 1;">folder</span>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Storage</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- MEDIUM RISK APP -->
+<div class="list-item-divider p-inner-padding hover:bg-white/5 transition-colors group">
+<div class="flex items-start gap-4">
+<img alt="App Icon" class="w-12 h-12 rounded-xl object-cover border border-white/10 shadow-lg" data-alt="A productivity app icon with a stylized checkmark inside a sleek, dark metallic circle. Professional, modern corporate software design." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCiaqXXP-ENY84XDG81kMg9nUSSAvkrkP2b8v1QVhM88Wi9bPQsi-XyqV76ofUgUBAbexgWs7PDfili6UMjwPSI0e7txBHpRARTc-S2X1nhWoWu4A1yx3T9TmrkniOQ4URHylKzGLrzriCgGtgws3aOm3Iu39XsMJorHSL2VTF9jN_dhjQX28IhDAeyEqvNZH0Qzvo3WWZSKZj8KcmQcGexwbMlSMj166V9JDo5MqCgQbSZl1pbodF3nzovw6etp4-0V35hLhS4NoZT"/>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-2">
+<h2 class="font-title-lg text-title-lg text-on-surface group-hover:text-privacy-accent transition-colors">DailyTasker</h2>
+<div class="flex items-center gap-1">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-risk-medium/10 text-risk-medium border border-risk-medium/30 risk-glow-medium backdrop-blur-md">Medium Risk</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[16px] cursor-help hover:text-white transition-colors" title="Medium Risk: Monitor usage">info</span>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-3">Standard permissions, but ad-tracking enabled.</p>
+<div class="flex flex-wrap gap-2">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container/50 border border-white/5">
+<span class="material-symbols-outlined text-[14px] text-risk-medium" style="font-variation-settings: 'FILL' 1;">notifications</span>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Notifications</span>
+</div>
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container/50 border border-white/5">
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant" style="font-variation-settings: 'FILL' 0;">wifi</span>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Network</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- LOW RISK APP -->
+<div class="list-item-divider p-inner-padding hover:bg-white/5 transition-colors group">
+<div class="flex items-start gap-4">
+<img alt="App Icon" class="w-12 h-12 rounded-xl object-cover border border-white/10 shadow-lg" data-alt="A simple, elegant utility app icon showing a stylized calculator or tool in cool blue tones on a dark background. Flat design, clean and safe looking." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB4yH2gu1GzdclXSoMwFMaTGE8_tmkWoOzRwjJPfmKTppRd1xhhw9plqat8rzSB5y59ZAkdCC9YysrZr_-VnSjjIZwPNWOs-HqNuZ33s4Y0epyOwJm-D68HjQYo87CNxmN62G-E4I_2oPXc1iIEgCEVePe2UGzDCM_8c5wN4Xb7yG2gxm8gRFR7Ook2zVZQomrY5A8ysXWarmJ3kKQxMLnKEDv6tyy8JoZHt0MoGQr5rL3W3OqKGIYLVoeggOBvLUnLzjA7K2zNbQgq"/>
+<div class="flex-1">
+<div class="flex justify-between items-start mb-2">
+<h2 class="font-title-lg text-title-lg text-on-surface group-hover:text-privacy-accent transition-colors">CalcPlus</h2>
+<div class="flex items-center gap-1">
+<span class="px-3 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase bg-risk-low/10 text-risk-low border border-risk-low/30 risk-glow-low backdrop-blur-md">Low Risk</span>
+<span class="material-symbols-outlined text-on-surface-variant text-[16px] cursor-help hover:text-white transition-colors" title="Low Risk: Safe to use">info</span>
+</div>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant mb-3">Minimal permissions required.</p>
+<div class="flex flex-wrap gap-2">
+<div class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface-container/50 border border-white/5">
+<span class="material-symbols-outlined text-[14px] text-on-surface-variant" style="font-variation-settings: 'FILL' 0;">vibration</span>
+<span class="font-label-caps text-[10px] text-on-surface-variant">Haptics</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar (Hidden per instructions since this is a sub-page/task-focused screen with a back button, but keeping it commented out as per JSON requirement logic for top-level destinations. Since this is a sub-page "Privacy Scan Results" with a back button, it should be suppressed.) -->
+<!-- Navigation suppressed due to Task-Focused intent (implied by back button in TopAppBar) -->
+</body></html>

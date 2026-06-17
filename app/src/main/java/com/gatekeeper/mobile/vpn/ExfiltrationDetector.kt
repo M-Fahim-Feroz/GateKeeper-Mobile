@@ -12,12 +12,13 @@ import javax.inject.Singleton
 @Singleton
 class ExfiltrationDetector @Inject constructor(
     private val sensorLogRepository: SensorLogRepository,
-    private val securityAlertRepository: SecurityAlertRepository
+    private val securityAlertRepository: SecurityAlertRepository,
+    private val notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 ) {
     private val scope = CoroutineScope(Dispatchers.IO)
     
     // Track recent heavy uploads to prevent alert spam
-    private val alertedConnections = mutableSetOf<String>()
+    private val alertedConnections = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     /**
      * Called by TrafficLogger for every significant outbound connection.
@@ -61,6 +62,12 @@ class ExfiltrationDetector @Inject constructor(
                     title = "Potential Data Exfiltration",
                     description = "$appName accessed the $sensorType and then sent ${bytesOut / 1024} KB to $location ($remoteIp).",
                     packageName = packageName
+                )
+
+                notificationManager.sendSecurityAlert(
+                    title = "🚨 Potential Data Exfiltration",
+                    message = "$appName accessed the $sensorType and then sent ${bytesOut / 1024} KB to $location.",
+                    route = "threats"
                 )
                 
                 alertedConnections.add(dedupKey)

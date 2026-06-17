@@ -45,12 +45,12 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
         viewModel.checkServerHealth()
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
+    Column(modifier = Modifier.fillMaxSize().background(LocalGKColors.current.background)) {
         // App Bar / Header
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(AccentOrange.copy(alpha = 0.08f), DarkBackground)))
+                .background(Brush.verticalGradient(listOf(LocalGKColors.current.accentOrange.copy(alpha = 0.08f), LocalGKColors.current.background)))
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -59,11 +59,11 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
                         .background(Brush.linearGradient(GradientOrange.map { it.copy(alpha = 0.2f) })),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.SmartToy, null, tint = AccentOrange, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Filled.SmartToy, null, tint = LocalGKColors.current.accentOrange, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Security Assistant", style = MaterialTheme.typography.displaySmall, color = TextPrimary)
+                    Text("Security Assistant", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
                     StatusBadge(
                         isActive = isServerOnline,
                         activeText = "Connected to Desktop AI",
@@ -71,7 +71,7 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
                     )
                 }
                 IconButton(onClick = { viewModel.clearChat() }) {
-                    Icon(Icons.Filled.DeleteOutline, "Clear Chat", tint = TextTertiary)
+                    Icon(Icons.Filled.DeleteOutline, "Clear Chat", tint = LocalGKColors.current.textTertiary)
                 }
             }
         }
@@ -81,27 +81,27 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(AccentOrange.copy(alpha = 0.10f))
+                    .background(LocalGKColors.current.accentOrange.copy(alpha = 0.10f))
                     .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.Outlined.WifiOff, contentDescription = "Offline", tint = AccentOrange, modifier = Modifier.size(18.dp))
+                Icon(Icons.Outlined.WifiOff, contentDescription = "Offline", tint = LocalGKColors.current.accentOrange, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
                         "Desktop backend not connected",
                         style = MaterialTheme.typography.titleSmall,
-                        color = AccentOrange,
+                        color = LocalGKColors.current.accentOrange,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
                         "Go to Settings → Desktop Integration to set your PC's IP address.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = LocalGKColors.current.textSecondary
                     )
                 }
                 TextButton(onClick = { viewModel.checkServerHealth() }) {
-                    Text("Retry", color = AccentOrange, fontWeight = FontWeight.Bold)
+                    Text("Retry", color = LocalGKColors.current.accentOrange, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -117,16 +117,16 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
                 item {
                     Box(modifier = Modifier.fillParentMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(32.dp)) {
-                            Icon(Icons.Outlined.SmartToy, null, tint = TextTertiary, modifier = Modifier.size(64.dp))
+                            Icon(Icons.Outlined.SmartToy, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(64.dp))
                             Spacer(Modifier.height(16.dp))
-                            Text("I am your AI Security Assistant.", style = MaterialTheme.typography.titleLarge, color = TextSecondary)
+                            Text("I am your AI Security Assistant.", style = MaterialTheme.typography.titleLarge, color = LocalGKColors.current.textSecondary)
                             Spacer(Modifier.height(8.dp))
                             Text(
                                 "I can help you monitor traffic, configure firewall rules, block malicious domains, and analyze device permissions.",
-                                style = MaterialTheme.typography.bodyMedium, color = TextTertiary, textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                                style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textTertiary, textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                             Spacer(Modifier.height(24.dp))
-                            Text("Try asking:", color = TextSecondary, fontWeight = FontWeight.Bold)
+                            Text("Try asking:", color = LocalGKColors.current.textSecondary, fontWeight = FontWeight.Bold)
                             Spacer(Modifier.height(8.dp))
                             SuggestionChip("Block YouTube from accessing internet", onClick = { inputText = "Block YouTube from accessing the internet" })
                             SuggestionChip("Allow Discord to connect", onClick = { inputText = "Remove Discord from the firewall blocklist" })
@@ -146,17 +146,17 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
-                            modifier = Modifier.size(32.dp).clip(CircleShape).background(DarkSurfaceVariant),
+                            modifier = Modifier.size(32.dp).clip(CircleShape).background(LocalGKColors.current.surfaceVariant),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Filled.SmartToy, null, tint = AccentOrange, modifier = Modifier.size(18.dp))
+                            Icon(Icons.Filled.SmartToy, null, tint = LocalGKColors.current.accentOrange, modifier = Modifier.size(18.dp))
                         }
                         Spacer(Modifier.width(12.dp))
                         Box(
                             modifier = Modifier.clip(RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp))
-                                .background(DarkCard).padding(horizontal = 16.dp, vertical = 10.dp)
+                                .background(LocalGKColors.current.card).padding(horizontal = 16.dp, vertical = 10.dp)
                         ) {
-                            PulsingDots(color = AccentOrange)
+                            PulsingDots(color = LocalGKColors.current.accentOrange)
                         }
                     }
                 }
@@ -167,7 +167,7 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(DarkSurface)
+                .background(LocalGKColors.current.surface)
                 .padding(horizontal = 16.dp, vertical = 12.dp)
                 .navigationBarsPadding()
         ) {
@@ -176,15 +176,15 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
                     value = inputText,
                     onValueChange = { inputText = it },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Ask security assistant...", color = TextTertiary) },
+                    placeholder = { Text("Ask security assistant...", color = LocalGKColors.current.textTertiary) },
                     shape = RoundedCornerShape(20.dp),
                     colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentOrange.copy(alpha = 0.5f),
-                        unfocusedBorderColor = GlassBorder,
-                        focusedContainerColor = DarkCard,
-                        unfocusedContainerColor = DarkBackground,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary
+                        focusedBorderColor = LocalGKColors.current.accentOrange.copy(alpha = 0.5f),
+                        unfocusedBorderColor = LocalGKColors.current.border,
+                        focusedContainerColor = LocalGKColors.current.card,
+                        unfocusedContainerColor = LocalGKColors.current.background,
+                        focusedTextColor = LocalGKColors.current.textPrimary,
+                        unfocusedTextColor = LocalGKColors.current.textPrimary
                     ),
                     maxLines = 3
                 )
@@ -200,10 +200,10 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
                     shape = CircleShape,
                     modifier = Modifier.size(48.dp),
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = AccentOrange,
-                        contentColor = DarkBackground,
-                        disabledContainerColor = DarkSurfaceVariant,
-                        disabledContentColor = TextTertiary
+                        containerColor = LocalGKColors.current.accentOrange,
+                        contentColor = LocalGKColors.current.background,
+                        disabledContainerColor = LocalGKColors.current.surfaceVariant,
+                        disabledContentColor = LocalGKColors.current.textTertiary
                     )
                 ) {
                     Icon(Icons.Filled.Send, null, modifier = Modifier.size(20.dp))
@@ -216,7 +216,7 @@ fun AiChatScreen(viewModel: AiChatViewModel = hiltViewModel()) {
 @Composable
 fun ChatMessageItem(message: ChatMessage) {
     val isUser = message.role == "user"
-    val bubbleColor = if (isUser) PrimaryCyan.copy(alpha = 0.15f) else DarkCard
+    val bubbleColor = if (isUser) LocalGKColors.current.primary.copy(alpha = 0.15f) else LocalGKColors.current.card
     val shape = if (isUser) RoundedCornerShape(16.dp, 16.dp, 4.dp, 16.dp) else RoundedCornerShape(16.dp, 16.dp, 16.dp, 4.dp)
     
     Row(
@@ -226,10 +226,10 @@ fun ChatMessageItem(message: ChatMessage) {
     ) {
         if (!isUser) {
             Box(
-                modifier = Modifier.size(32.dp).clip(CircleShape).background(DarkSurfaceVariant),
+                modifier = Modifier.size(32.dp).clip(CircleShape).background(LocalGKColors.current.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.SmartToy, null, tint = AccentOrange, modifier = Modifier.size(18.dp))
+                Icon(Icons.Filled.SmartToy, null, tint = LocalGKColors.current.accentOrange, modifier = Modifier.size(18.dp))
             }
             Spacer(Modifier.width(8.dp))
         }
@@ -242,12 +242,12 @@ fun ChatMessageItem(message: ChatMessage) {
                 modifier = Modifier
                     .clip(shape)
                     .background(bubbleColor)
-                    .border(1.dp, if (isUser) PrimaryCyan.copy(alpha = 0.3f) else GlassBorder, shape)
+                    .border(1.dp, if (isUser) LocalGKColors.current.primary.copy(alpha = 0.3f) else LocalGKColors.current.border, shape)
                     .padding(horizontal = 16.dp, vertical = 12.dp)
             ) {
                 Text(
                     text = message.content,
-                    color = TextPrimary,
+                    color = LocalGKColors.current.textPrimary,
                     style = MaterialTheme.typography.bodyLarge
                 )
             }
@@ -255,9 +255,9 @@ fun ChatMessageItem(message: ChatMessage) {
             if (message.toolCalls.isNotEmpty()) {
                 Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.CheckCircle, null, tint = AccentGreen, modifier = Modifier.size(12.dp))
+                    Icon(Icons.Filled.CheckCircle, null, tint = LocalGKColors.current.accentGreen, modifier = Modifier.size(12.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Executed ${message.toolCalls.size} operations", style = MaterialTheme.typography.labelSmall, color = AccentGreen)
+                    Text("Executed ${message.toolCalls.size} operations", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.accentGreen)
                 }
             }
         }
@@ -268,14 +268,14 @@ fun ChatMessageItem(message: ChatMessage) {
 fun SuggestionChip(text: String, onClick: () -> Unit) {
     Surface(
         onClick = onClick,
-        color = DarkCard,
+        color = LocalGKColors.current.card,
         shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+        border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.border)
     ) {
         Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text, style = MaterialTheme.typography.bodySmall, color = TextPrimary)
+            Text(text, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textPrimary)
             Spacer(Modifier.width(8.dp))
-            Icon(Icons.Filled.ArrowUpward, null, tint = TextTertiary, modifier = Modifier.size(14.dp))
+            Icon(Icons.Filled.ArrowUpward, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(14.dp))
         }
     }
 }

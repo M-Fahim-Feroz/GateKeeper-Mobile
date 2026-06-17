@@ -51,17 +51,17 @@ fun WifiScannerScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
+    Column(modifier = Modifier.fillMaxSize().background(LocalGKColors.current.background)) {
         // Header
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(PrimaryCyan.copy(alpha = 0.08f), DarkBackground)))
+                .background(Brush.verticalGradient(listOf(LocalGKColors.current.primary.copy(alpha = 0.08f), LocalGKColors.current.background)))
                 .padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
             if (navController != null) {
                 IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.ArrowBack, "Back", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.ArrowBack, "Back", tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.height(4.dp))
             }
@@ -71,12 +71,12 @@ fun WifiScannerScreen(
                         .background(Brush.linearGradient(GradientTeal.map { it.copy(alpha = 0.2f) })),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.WifiTethering, null, tint = AccentTeal, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Filled.WifiTethering, null, tint = LocalGKColors.current.accentTeal, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Wi-Fi Scanner", style = MaterialTheme.typography.displaySmall, color = TextPrimary)
-                    Text("Analyze local network security", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("Wi-Fi Scanner", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
+                    Text("Analyze local network security", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
                 }
             }
 
@@ -99,15 +99,15 @@ fun WifiScannerScreen(
                 shape = RoundedCornerShape(14.dp),
                 enabled = !isScanning,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = PrimaryCyan,
-                    contentColor = DarkBackground,
-                    disabledContainerColor = DarkSurfaceVariant
+                    containerColor = LocalGKColors.current.primary,
+                    contentColor = LocalGKColors.current.background,
+                    disabledContainerColor = LocalGKColors.current.surfaceVariant
                 )
             ) {
                 if (isScanning) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = TextTertiary)
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = LocalGKColors.current.textTertiary)
                     Spacer(Modifier.width(12.dp))
-                    Text("Scanning Network...", color = TextTertiary, fontWeight = FontWeight.Bold)
+                    Text("Scanning Network...", color = LocalGKColors.current.textTertiary, fontWeight = FontWeight.Bold)
                 } else {
                     Icon(Icons.Filled.Search, null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
@@ -119,9 +119,9 @@ fun WifiScannerScreen(
         if (results.isEmpty() && !isScanning) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Filled.Wifi, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
+                    Icon(Icons.Filled.Wifi, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(52.dp))
                     Spacer(Modifier.height(12.dp))
-                    Text("No scan results yet", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Text("No scan results yet", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
             }
         } else {
@@ -146,12 +146,12 @@ fun WifiScannerScreen(
     if (showPermissionDeniedDialog) {
         AlertDialog(
             onDismissRequest = { showPermissionDeniedDialog = false },
-            containerColor = DarkCard,
-            title = { Text("Location Required", color = TextPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("Android explicitly requires Location Permissions for apps to scan Wi-Fi networks in order to evaluate their encryption security.", color = TextSecondary) },
+            containerColor = LocalGKColors.current.card,
+            title = { Text("Location Required", color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Android explicitly requires Location Permissions for apps to scan Wi-Fi networks in order to evaluate their encryption security.", color = LocalGKColors.current.textSecondary) },
             confirmButton = {
                 TextButton(onClick = { showPermissionDeniedDialog = false }) {
-                    Text("Understood", color = PrimaryCyan, fontWeight = FontWeight.Bold)
+                    Text("Understood", color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
                 }
             }
         )
@@ -163,9 +163,9 @@ fun DeviceItem(result: WifiNetworkInfo) {
     var expanded by remember { mutableStateOf(false) }
 
     val leftBorderColor = when {
-        result.isEvilTwin  -> AccentRed
-        result.isSuspicious -> AccentOrange
-        else               -> AccentGreen.copy(alpha = 0f) // invisible for clean networks
+        result.isEvilTwin  -> LocalGKColors.current.accentRed
+        result.isSuspicious -> LocalGKColors.current.accentOrange
+        else               -> LocalGKColors.current.accentGreen.copy(alpha = 0f) // invisible for clean networks
     }
 
     val badgeText = when {
@@ -175,24 +175,24 @@ fun DeviceItem(result: WifiNetworkInfo) {
         else                -> "Secure"
     }
     val badgeColor = when {
-        result.isEvilTwin   -> AccentRed
-        result.isSuspicious -> AccentOrange
-        result.securityType == "OPEN" -> AccentRed
-        else                -> AccentGreen
+        result.isEvilTwin   -> LocalGKColors.current.accentRed
+        result.isSuspicious -> LocalGKColors.current.accentOrange
+        result.securityType == "OPEN" -> LocalGKColors.current.accentRed
+        else                -> LocalGKColors.current.accentGreen
     }
 
     val wifiIcon = Icons.Filled.Wifi
     val signalTint = when {
         result.isEvilTwin || result.isSuspicious -> badgeColor
-        result.securityType == "OPEN" -> AccentOrange
-        else -> AccentGreen
+        result.securityType == "OPEN" -> LocalGKColors.current.accentOrange
+        else -> LocalGKColors.current.accentGreen
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
             .then(
                 if (result.isEvilTwin || result.isSuspicious)
                     Modifier.border(1.dp, leftBorderColor.copy(alpha = 0.5f), RoundedCornerShape(14.dp))
@@ -223,7 +223,7 @@ fun DeviceItem(result: WifiNetworkInfo) {
                     Text(
                         result.ssid.ifEmpty { "Hidden Network" },
                         style = MaterialTheme.typography.titleSmall,
-                        color = TextPrimary,
+                        color = LocalGKColors.current.textPrimary,
                         fontWeight = FontWeight.SemiBold
                     )
                     Text(
@@ -232,7 +232,7 @@ fun DeviceItem(result: WifiNetworkInfo) {
                             if (result.vendorName != null) append(" · ${result.vendorName}")
                         },
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = LocalGKColors.current.textSecondary
                     )
                 }
 
@@ -254,7 +254,7 @@ fun DeviceItem(result: WifiNetworkInfo) {
             // Expandable threat detail for evil twin / suspicious
             if ((result.isEvilTwin || result.isSuspicious) && expanded) {
                 Spacer(Modifier.height(12.dp))
-                HorizontalDivider(color = GlassBorder)
+                HorizontalDivider(color = LocalGKColors.current.border)
                 Spacer(Modifier.height(12.dp))
                 val detailText = if (result.isEvilTwin)
                     "This network matches a known Wi-Fi name but uses a different MAC address. This may be an Evil Twin access point intercepting your traffic.\n\nRecommendation: Disconnect immediately and use mobile data."
@@ -263,7 +263,7 @@ fun DeviceItem(result: WifiNetworkInfo) {
                 Text(
                     detailText,
                     style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
+                    color = LocalGKColors.current.textSecondary
                 )
             }
         }
@@ -273,13 +273,13 @@ fun DeviceItem(result: WifiNetworkInfo) {
 @Composable
 fun KnownNetworkItem(network: KnownNetwork, onTrust: () -> Unit) {
     val isTrusted = network.isTrusted
-    val scoreColor = if (isTrusted) AccentGreen else AccentRed
+    val scoreColor = if (isTrusted) LocalGKColors.current.accentGreen else LocalGKColors.current.accentRed
     
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -291,13 +291,13 @@ fun KnownNetworkItem(network: KnownNetwork, onTrust: () -> Unit) {
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(network.ssid, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text(network.bssid, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Text(network.ssid, style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.SemiBold)
+                Text(network.bssid, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
             }
             
             if (!isTrusted) {
                 TextButton(onClick = onTrust) {
-                    Text("Trust", color = PrimaryCyan, fontWeight = FontWeight.Bold)
+                    Text("Trust", color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
                 }
             } else {
                 Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(scoreColor.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp)) {

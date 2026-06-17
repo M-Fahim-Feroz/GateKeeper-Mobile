@@ -43,4 +43,8 @@ class SensorLogRepository @Inject constructor(
     suspend fun logAccessEnd(logId: Long, durationMs: Long) {
         dao.updateDuration(logId, durationMs)
     }
+
+    suspend fun simulateLog(log: SensorLog) {
+        dao.insert(log)
+    }
 }

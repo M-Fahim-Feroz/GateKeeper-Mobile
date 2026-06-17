@@ -71,36 +71,47 @@ class FirewallViewModel @Inject constructor(
 
     fun toggleBlock(packageName: String, appName: String, blocked: Boolean) {
         viewModelScope.launch {
-            firewallRepository.toggleBlock(packageName, appName, blocked)
-            // _apps is automatically updated via observeAll() in init
+            try {
+                firewallRepository.toggleBlock(packageName, appName, blocked)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     // F8: Toggle screen-off blocking per app
     fun toggleScreenOffBlock(packageName: String, appName: String, block: Boolean) {
         viewModelScope.launch {
-            val existing = firewallRepository.getRule(packageName)
-            val rule = existing ?: com.gatekeeper.mobile.data.db.entity.FirewallRule(
-                packageName = packageName,
-                appName = appName
-            )
-            firewallRepository.upsertRule(rule.copy(blockWhenScreenOff = block, updatedAt = System.currentTimeMillis()))
+            try {
+                val existing = firewallRepository.getRule(packageName)
+                val rule = existing ?: com.gatekeeper.mobile.data.db.entity.FirewallRule(
+                    packageName = packageName,
+                    appName = appName
+                )
+                firewallRepository.upsertRule(rule.copy(blockWhenScreenOff = block, updatedAt = System.currentTimeMillis()))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
     fun updateSchedule(packageName: String, appName: String, enabled: Boolean, start: Int, end: Int) {
         viewModelScope.launch {
-            val existing = firewallRepository.getRule(packageName)
-            val rule = existing ?: com.gatekeeper.mobile.data.db.entity.FirewallRule(
-                packageName = packageName,
-                appName = appName
-            )
-            firewallRepository.upsertRule(rule.copy(
-                blockScheduleEnabled = enabled,
-                blockStartMinutes = start,
-                blockEndMinutes = end,
-                updatedAt = System.currentTimeMillis()
-            ))
+            try {
+                val existing = firewallRepository.getRule(packageName)
+                val rule = existing ?: com.gatekeeper.mobile.data.db.entity.FirewallRule(
+                    packageName = packageName,
+                    appName = appName
+                )
+                firewallRepository.upsertRule(rule.copy(
+                    blockScheduleEnabled = enabled,
+                    blockStartMinutes = start,
+                    blockEndMinutes = end,
+                    updatedAt = System.currentTimeMillis()
+                ))
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }

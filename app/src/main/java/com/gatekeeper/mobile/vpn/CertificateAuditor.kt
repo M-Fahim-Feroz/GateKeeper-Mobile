@@ -1,5 +1,8 @@
 package com.gatekeeper.mobile.vpn
 
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,7 +20,13 @@ data class RogueCertInfo(
     val issuerName: String,
     val subjectName: String,
     val expiresAt: String,
-    val riskLevel: String // "HIGH", "MEDIUM", "LOW"
+    val riskLevel: String, // "HIGH", "MEDIUM", "LOW"
+    val isUserInstalled: Boolean
+)
+
+data class VulnerableAppInfo(
+    val packageName: String,
+    val appName: String
 )
 
 @Singleton
@@ -35,8 +44,31 @@ class CertificateAuditor @Inject constructor(
         )
     }
 
-    suspend fun auditUserCertificates(): List<RogueCertInfo> = withContext(Dispatchers.IO) {
-        val riskyCerts = mutableListOf<RogueCertInfo>()
+    suspend fun getAppsTrustingUserCAs(context: Context): List<VulnerableAppInfo> = withContext(Dispatchers.IO) {
+        val vulnerableApps = mutableListOf<VulnerableAppInfo>()
+        try {
+            val pm = context.packageManager
+            val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+            for (appInfo in packages) {
+                // Ignore system apps
+                if ((appInfo.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0) continue
+                
+                // Apps targeting API < 24 implicitly trust user certificates
+                if (appInfo.targetSdkVersion < Build.VERSION_CODES.N) {
+                    val appName = pm.getApplicationLabel(appInfo).toString()
+                    vulnerableApps.add(VulnerableAppInfo(appInfo.packageName, appName))
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error finding vulnerable apps", e)
+        }
+        
+        return@withContext vulnerableApps.sortedBy { it.appName }
+    }
+
+    suspend fun auditCertificates(): Pair<List<RogueCertInfo>, List<RogueCertInfo>> = withContext(Dispatchers.IO) {
+        val userCerts = mutableListOf<RogueCertInfo>()
+        val systemCerts = mutableListOf<RogueCertInfo>()
         try {
             val ks = KeyStore.getInstance("AndroidCAStore")
             ks.load(null, null)
@@ -44,24 +76,35 @@ class CertificateAuditor @Inject constructor(
             val aliases = ks.aliases().toList()
             
             for (alias in aliases) {
-                // User-installed certificates generally start with "user:"
-                if (alias.startsWith("user:")) {
-                    val cert = ks.getCertificate(alias) as? X509Certificate ?: continue
-                    
-                    val issuerDn = cert.issuerDN.name ?: "Unknown"
-                    val subjectDn = cert.subjectDN.name ?: "Unknown"
-                    val expiry = cert.notAfter
-                    
-                    val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                    val expiresStr = if (expiry != null) formatter.format(expiry) else "Unknown"
-                    
-                    // Determine risk
-                    val issuerLower = issuerDn.lowercase()
-                    val riskLevel = when {
-                        knownRiskyIssuers.any { issuerLower.contains(it) } -> "HIGH"
-                        else -> "MEDIUM" // Any user-installed CA is inherently somewhat risky
-                    }
-                    
+                val cert = ks.getCertificate(alias) as? X509Certificate ?: continue
+                
+                val issuerDn = cert.issuerDN.name ?: "Unknown"
+                val subjectDn = cert.subjectDN.name ?: "Unknown"
+                val expiry = cert.notAfter
+                
+                val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
+                val expiresStr = if (expiry != null) formatter.format(expiry) else "Unknown"
+                
+                val isUserInstalled = alias.startsWith("user:")
+                
+                // Determine risk
+                val issuerLower = issuerDn.lowercase()
+                val riskLevel = when {
+                    isUserInstalled && knownRiskyIssuers.any { issuerLower.contains(it) } -> "HIGH"
+                    isUserInstalled -> "MEDIUM"
+                    else -> "LOW"
+                }
+                
+                val certInfo = RogueCertInfo(
+                    alias = alias,
+                    issuerName = issuerDn,
+                    subjectName = subjectDn,
+                    expiresAt = expiresStr,
+                    riskLevel = riskLevel,
+                    isUserInstalled = isUserInstalled
+                )
+                
+                if (isUserInstalled) {
                     // Generate Alert
                     securityAlertRepository.addAlert(
                         type = "ROGUE_CA",
@@ -77,22 +120,15 @@ class CertificateAuditor @Inject constructor(
                             route = "cert_audit"
                         )
                     }
-                    
-                    riskyCerts.add(
-                        RogueCertInfo(
-                            alias = alias,
-                            issuerName = issuerDn,
-                            subjectName = subjectDn,
-                            expiresAt = expiresStr,
-                            riskLevel = riskLevel
-                        )
-                    )
+                    userCerts.add(certInfo)
+                } else {
+                    systemCerts.add(certInfo)
                 }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error auditing certificates", e)
         }
         
-        return@withContext riskyCerts
+        return@withContext Pair(systemCerts, userCerts)
     }
 }

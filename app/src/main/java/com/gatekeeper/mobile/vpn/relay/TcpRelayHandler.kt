@@ -33,7 +33,8 @@ data class ParsedTcpPacket(
 
 class TcpRelayHandler(
     private val vpnService: VpnService,
-    private val dnsBlocklistManager: com.gatekeeper.mobile.vpn.DnsBlocklistManager
+    private val dnsBlocklistManager: com.gatekeeper.mobile.vpn.DnsBlocklistManager,
+    private val connectionTracker: com.gatekeeper.mobile.vpn.ConnectionTracker
 ) {
 
     companion object {
@@ -231,6 +232,12 @@ class TcpRelayHandler(
                     )
                     synchronized(writeLock) { tunOut.write(dataPacket) }
                     session.serverSeq.addAndGet(readBytes.toLong())
+                    
+                    val srcIpStr = try { InetAddress.getByAddress(session.srcIp).hostAddress } catch (e: Exception) { null }
+                    val dstIpStr = try { InetAddress.getByAddress(session.dstIp).hostAddress } catch (e: Exception) { null }
+                    if (srcIpStr != null && dstIpStr != null) {
+                        connectionTracker.addInboundBytes("TCP", srcIpStr, session.srcPort, dstIpStr, session.dstPort, readBytes.toLong())
+                    }
                 }
             }
             
@@ -393,5 +400,15 @@ class TcpRelayHandler(
     fun cleanup() {
         sessions.values.forEach { try { it.realSocket.close() } catch(e: Exception){} }
         sessions.clear()
+    }
+
+    fun sweepStaleSessions(maxAgeMs: Long = 300_000) {
+        val cutoff = System.currentTimeMillis() - maxAgeMs
+        sessions.entries.removeIf { (key, session) ->
+            if (session.lastActive < cutoff) {
+                try { session.realSocket.close() } catch (e: Exception) {}
+                true
+            } else false
+        }
     }
 }

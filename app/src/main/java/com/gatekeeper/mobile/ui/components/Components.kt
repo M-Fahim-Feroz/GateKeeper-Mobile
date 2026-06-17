@@ -1,4 +1,4 @@
-﻿package com.gatekeeper.mobile.ui.components
+package com.gatekeeper.mobile.ui.components
 
 import androidx.compose.animation.core.*
 import androidx.compose.animation.animateColorAsState
@@ -22,28 +22,28 @@ import androidx.compose.ui.unit.dp
 import com.gatekeeper.mobile.ui.theme.*
 
 /**
- * Premium Glassmorphic card â€” subtle gradient border, deep translucent fill.
+ * Premium Glassmorphic card — subtle gradient border, deep translucent fill.
+ * Uses GKColors tokens so it adapts to both dark and light themes.
  */
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
     cornerRadius: Dp = 18.dp,
-    borderColor: Color = GlassBorder,
-    backgroundColor: Color = GlassBackground,
     content: @Composable ColumnScope.() -> Unit
 ) {
+    val colors = LocalGKColors.current
     val shape = RoundedCornerShape(cornerRadius)
     Column(
         modifier = modifier
             .clip(shape)
-            .background(backgroundColor)
+            .background(colors.glassBg)
             .border(
                 width = 1.dp,
                 brush = Brush.linearGradient(
                     listOf(
-                        borderColor.copy(alpha = 0.8f),
-                        borderColor.copy(alpha = 0.15f),
-                        borderColor.copy(alpha = 0.6f)
+                        colors.border.copy(alpha = 0.8f),
+                        colors.border.copy(alpha = 0.15f),
+                        colors.border.copy(alpha = 0.6f)
                     )
                 ),
                 shape = shape
@@ -118,13 +118,14 @@ fun StatCard(
     val shape = RoundedCornerShape(16.dp)
     Column(
         modifier = modifier
-            .clip(shape)
-            .background(DarkCard)
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(gradientColors.map { it.copy(alpha = 0.4f) }),
-                shape = shape
-            )
+            .glassCard(shape = shape)
+            .drawBehind {
+                drawRect(
+                    color = gradientColors.first(),
+                    topLeft = androidx.compose.ui.geometry.Offset(0f, 0f),
+                    size = androidx.compose.ui.geometry.Size(size.width, 3.dp.toPx())
+                )
+            }
             .padding(horizontal = 14.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
@@ -138,7 +139,7 @@ fun StatCard(
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
-            color = TextTertiary,
+            color = LocalGKColors.current.textTertiary,
             fontWeight = FontWeight.Medium
         )
     }
@@ -168,7 +169,7 @@ fun SectionHeader(
                     .height(16.dp)
                     .clip(RoundedCornerShape(2.dp))
                     .background(
-                        Brush.verticalGradient(GradientPrimary)
+                        Brush.verticalGradient(listOf(LocalGKColors.current.primary, LocalGKColors.current.borderFocus))
                     )
             )
             Spacer(modifier = Modifier.width(8.dp))
@@ -176,7 +177,7 @@ fun SectionHeader(
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = LocalGKColors.current.textPrimary
             )
         }
         action?.invoke()

@@ -86,7 +86,7 @@ class GateKeeperVpnService : VpnService() {
     lateinit var bandwidthMonitor: com.gatekeeper.mobile.vpn.BandwidthMonitor
 
     private var vpnInterface: ParcelFileDescriptor? = null
-    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var packetLoopJob: Job? = null
     private var reportingJob: Job? = null
 
@@ -99,6 +99,10 @@ class GateKeeperVpnService : VpnService() {
     // F18: PCAP Recording State
     private var isPcapRecording = false
     private var currentPcapFile: java.io.File? = null
+
+    // Network reconnect state
+    private var networkCallback: android.net.ConnectivityManager.NetworkCallback? = null
+    private var currentBlockedPackages: List<String> = emptyList()
 
     // Screen State Receiver
     private val screenStateReceiver = object : BroadcastReceiver() {
@@ -118,6 +122,8 @@ class GateKeeperVpnService : VpnService() {
 
     override fun onCreate() {
         super.onCreate()
+        _isRunning.value = false
+        _isConnecting.value = false
         Log.i(TAG, "VPN Service created")
     }
 
@@ -147,8 +153,8 @@ class GateKeeperVpnService : VpnService() {
         // Initialize packet processing pipeline
         packetFilter = PacketFilter()
         dnsResolver = DnsResolver(this, dnsBlocklistManager)
-        udpRelayHandler = com.gatekeeper.mobile.vpn.relay.UdpRelayHandler(this)
-        tcpRelayHandler = com.gatekeeper.mobile.vpn.relay.TcpRelayHandler(this, dnsBlocklistManager)
+        udpRelayHandler = com.gatekeeper.mobile.vpn.relay.UdpRelayHandler(this, connectionTracker)
+        tcpRelayHandler = com.gatekeeper.mobile.vpn.relay.TcpRelayHandler(this, dnsBlocklistManager, connectionTracker)
 
         // Start Sensor Logging
         privacyAccessLogger.start()
@@ -165,14 +171,23 @@ class GateKeeperVpnService : VpnService() {
             // DNS query arrives, so nothing gets sinkholed on fresh VPN start.
             dnsBlocklistManager.awaitInitialLoad()
             Log.i(TAG, "DNS blocklists loaded. Starting VPN tunnel.")
+            
+            // Observe firewall rules (app blocking) ONLY after blocklists are loaded
+            launch {
+                firewallRepository.observeBlocked().collect { blockedRules ->
+                    currentBlockedPackages = blockedRules.map { it.packageName }
+                    Log.i(TAG, "Firewall rules updated. Rebuilding VPN for ${currentBlockedPackages.size} blocked apps.")
+                    rebuildVpnInterface(currentBlockedPackages)
+                }
+            }
         }
-
-        // Observe firewall rules (app blocking)
+        
+        // Background session sweeping
         serviceScope.launch {
-            firewallRepository.observeBlocked().collect { blockedRules ->
-                val blockedPackages = blockedRules.map { it.packageName }
-                Log.i(TAG, "Firewall rules updated. Rebuilding VPN for ${blockedPackages.size} blocked apps.")
-                rebuildVpnInterface(blockedPackages)
+            while (isActive) {
+                delay(30_000)
+                udpRelayHandler?.sweepStaleSessions()
+                tcpRelayHandler?.sweepStaleSessions()
             }
         }
         
@@ -214,18 +229,36 @@ class GateKeeperVpnService : VpnService() {
             dnsBlocklistManager.observeAndSync()
         }
 
-        // Monitor Wi-Fi connections for Evil Twin attacks
+        // Monitor network changes and Evil Twin attacks
         val cm = getSystemService(android.net.ConnectivityManager::class.java)
-        cm.registerDefaultNetworkCallback(object : android.net.ConnectivityManager.NetworkCallback() {
+        networkCallback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                super.onAvailable(network)
+                Log.i(TAG, "Network became available, rebuilding VPN to restore protected sockets")
+                serviceScope.launch { rebuildVpnInterface(currentBlockedPackages) }
+            }
+
+            override fun onLost(network: android.net.Network) {
+                super.onLost(network)
+                Log.i(TAG, "Network lost, cleaning up dead relay sessions")
+                udpRelayHandler?.cleanup()
+                tcpRelayHandler?.cleanup()
+            }
+
             override fun onCapabilitiesChanged(network: android.net.Network, nc: android.net.NetworkCapabilities) {
                 if (nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) {
                     val wifiInfo = nc.transportInfo as? android.net.wifi.WifiInfo
                     if (wifiInfo != null && wifiInfo.bssid != null && wifiInfo.bssid != "02:00:00:00:00:00") {
                         serviceScope.launch {
+                            val securityType = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                                if (wifiInfo.currentSecurityType == android.net.wifi.WifiInfo.SECURITY_TYPE_OPEN) "OPEN" else "SECURED"
+                            } else {
+                                "UNKNOWN"
+                            }
                             val result = rogueApDetector.checkConnection(
                                 ssid = wifiInfo.ssid,
                                 bssid = wifiInfo.bssid,
-                                securityType = if (wifiInfo.currentSecurityType == android.net.wifi.WifiInfo.SECURITY_TYPE_OPEN) "OPEN" else "SECURED"
+                                securityType = securityType
                             )
                             if (result == RogueApResult.EVIL_TWIN) {
                                 postBlockNotification("Wi-Fi Security", "Evil Twin Detected: ${wifiInfo.ssid}", "🛡️")
@@ -234,7 +267,8 @@ class GateKeeperVpnService : VpnService() {
                     }
                 }
             }
-        })
+        }
+        cm.registerDefaultNetworkCallback(networkCallback!!)
 
         // Register Screen State Receiver
         val screenFilter = IntentFilter().apply {
@@ -275,8 +309,10 @@ class GateKeeperVpnService : VpnService() {
     private fun startReportingLoop() {
         reportingJob?.cancel()
         reportingJob = serviceScope.launch {
-            while (isActive && _isRunning.value) {
+            while (isActive) {
                 delay(5000) // Report every 5 seconds
+                
+                if (!_isRunning.value) continue
                 
                 val connections = connectionTracker.getActiveConnections()
                 val now = System.currentTimeMillis()
@@ -297,7 +333,8 @@ class GateKeeperVpnService : VpnService() {
                             remoteIp = conn.remoteIp,
                             remotePort = conn.remotePort,
                             bytesIn = conn.bytesIn,
-                            bytesOut = conn.bytesOut
+                            bytesOut = conn.bytesOut,
+                            wasBlocked = false
                         )
                         
                         // Reset counters after logging
@@ -307,8 +344,6 @@ class GateKeeperVpnService : VpnService() {
                 }
                 trafficLogger.flushLogs()
                 connectionTracker.sweepIdle()
-                
-                // Idle connection cleanup is now active via sweepIdle()
             }
         }
     }
@@ -347,40 +382,29 @@ class GateKeeperVpnService : VpnService() {
                     .setBlocking(true)
                     .setMtu(VPN_MTU)
 
-                if (blockedPackages.isNotEmpty()) {
-                    // ── MODE A: Per-App Blocking ──────────────────────────────
-                    // ONLY blocked apps enter the tunnel. All other apps use real internet.
+                // ── HYBRID VPN MODE ────────────────────────────────────────────────────
+                if (currentBlockedPackages.isEmpty()) {
+                    // Mode 1: DNS-Only (Threat Intel for all apps, native internet speed)
+                    Log.i(TAG, "VPN Mode: DNS-Only Split Tunnel (Threat Intel Active)")
+                    builder.addRoute(VPN_DNS_ADDRESS, 32)
+                    builder.addDnsServer(VPN_DNS_ADDRESS)
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                        builder.allowBypass()
+                    }
+                    try { builder.addDisallowedApplication(packageName) } catch (e: Exception) {}
+                } else {
+                    // Mode 2: Strict App Firewall Mode
+                    // To block apps that use raw IPs (like WhatsApp), we MUST intercept their raw TCP/UDP.
+                    // But our TCP proxy slows down allowed apps. So we ONLY intercept the blocked apps.
+                    Log.i(TAG, "VPN Mode: Strict Firewall (Intercepting ${currentBlockedPackages.size} blocked apps)")
                     builder.addRoute("0.0.0.0", 0)
                     builder.addRoute("::", 0)
                     builder.addDnsServer(VPN_DNS_ADDRESS)
-                    builder.addDnsServer("fd00:1:fd00:1:fd00:1:fd00:2")
-
-                    blockedPackages.forEach { pkg ->
-                        try {
-                            builder.addAllowedApplication(pkg)
-                            Log.i(TAG, "Blocking app in tunnel: $pkg")
-                        } catch (e: Exception) {
-                            Log.w(TAG, "Could not restrict $pkg: ${e.message}")
+                    for (pkg in currentBlockedPackages) {
+                        try { builder.addAllowedApplication(pkg) } catch (e: Exception) {
+                            Log.e(TAG, "Failed to add allowed app: $pkg", e)
                         }
                     }
-                    Log.i(TAG, "VPN Mode: Per-App Block — ${blockedPackages.size} app(s) fully blocked")
-                } else {
-                    // ── MODE B: DNS-Intercept Split-Tunnel (no apps blocked) ──
-                    //
-                    // To make domain blocking work for all apps, we MUST intercept DNS.
-                    // We allow all regular TCP/UDP traffic to bypass the VPN natively.
-                    //
-                    // CRITICAL FIX FOR LINKEDIN/BANKING APPS:
-                    // We DO NOT add an IPv6 DNS server (fd00...). We ONLY add IPv4.
-                    // Android will send ONLY IPv4 DNS queries to our TUN. This prevents
-                    // our DnsResolver from receiving IPv6 queries, which it corrupts.
-                    // Furthermore, TCP port 53 is now dropped natively by PacketFilter,
-                    // so if an app tries TCP DNS it will fallback to UDP instantly.
-                    builder.allowBypass()
-                    builder.addRoute(VPN_DNS_ADDRESS, 32)
-                    builder.addDnsServer(VPN_DNS_ADDRESS)
-                    // Explicitly NO IPv6 route and NO IPv6 addDnsServer
-                    Log.i(TAG, "VPN Mode: DNS-Intercept Split-Tunnel (Domain Block Active)")
                 }
 
                 val oldInterface = vpnInterface
@@ -454,7 +478,20 @@ class GateKeeperVpnService : VpnService() {
 
                     launch(kotlinx.coroutines.Dispatchers.IO) {
                         val uid = connectionTracker.track(packetCopy, isOutbound = true)
-                        val verdict = packetFilter?.filter(packetCopy, uid) ?: PacketVerdict.ALLOW
+                        val originalVerdict = packetFilter?.filter(packetCopy, uid) ?: PacketVerdict.ALLOW
+                        
+                        val verdict = if (currentBlockedPackages.isNotEmpty()) {
+                            // STRICT MODE: We already filtered via addAllowedApplication.
+                            // EVERYTHING in the TUN belongs to a blocked app! No UID lookup needed!
+                            if (originalVerdict == PacketVerdict.DNS_INTERCEPT || originalVerdict == PacketVerdict.DNS_SINKHOLE) {
+                                PacketVerdict.DNS_SINKHOLE
+                            } else {
+                                PacketVerdict.DROP
+                            }
+                        } else {
+                            // DNS-ONLY MODE: We need to check Threat Intel
+                            originalVerdict
+                        }
 
                         when (verdict) {
                             PacketVerdict.ALLOW -> {
@@ -514,15 +551,17 @@ class GateKeeperVpnService : VpnService() {
                             PacketVerdict.DNS_INTERCEPT -> {
                                 val domain = dnsResolver?.resolveAndRespond(packetCopy, outputStream)
                                 val conn = connectionTracker.getConnectionByBuffer(packetCopy)
+                                val packageName = conn?.packageName ?: "unknown"
+                                
                                 if (domain != null && conn != null) {
                                     // F13: Check for DNS exfiltration patterns
                                     dnsBlocklistManager.checkDnsExfiltration(
                                         domain = domain,
-                                        packageName = conn.packageName ?: "unknown",
+                                        packageName = packageName,
                                         appName = conn.appName ?: "Unknown"
                                     )
                                     trafficLogger.log(
-                                        packageName = conn.packageName ?: "unknown",
+                                        packageName = packageName,
                                         appName = conn.appName ?: "Unknown",
                                         protocol = "DNS",
                                         localIp = conn.localIp,
@@ -572,18 +611,41 @@ class GateKeeperVpnService : VpnService() {
     private fun stopVpn() {
         Log.i(TAG, "Stopping VPN...")
         _isRunning.value = false
-        reportingJob?.cancel()
-        serviceScope.cancel()
+        try { reportingJob?.cancel() } catch (e: Exception) {}
+        try { serviceScope.cancel() } catch (e: Exception) {}
+        serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-        vpnInterface?.close()
+        try {
+            vpnInterface?.close()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing VPN interface", e)
+        }
         vpnInterface = null
 
         packetFilter = null
         dnsResolver = null
-        udpRelayHandler?.cleanup()
+        try { udpRelayHandler?.cleanup() } catch (e: Exception) {}
         udpRelayHandler = null
-        tcpRelayHandler?.cleanup()
+        try { tcpRelayHandler?.cleanup() } catch (e: Exception) {}
         tcpRelayHandler = null
+
+        try {
+            cellularMonitor.stop()
+        } catch (e: Exception) {}
+
+        try {
+            privacyAccessLogger.stop()
+        } catch (e: Exception) {}
+
+        try {
+            networkCallback?.let { 
+                val cm = getSystemService(android.net.ConnectivityManager::class.java)
+                cm?.unregisterNetworkCallback(it)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering network callback", e)
+        }
+        networkCallback = null
 
         try {
             unregisterReceiver(screenStateReceiver)
@@ -591,8 +653,18 @@ class GateKeeperVpnService : VpnService() {
             // Ignored if not registered
         }
 
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (e: Exception) {
+            try {
+                @Suppress("DEPRECATION")
+                stopForeground(true)
+            } catch (e2: Exception) {}
+        }
+        
+        try {
+            stopSelf()
+        } catch (e: Exception) {}
     }
 
     private fun createNotification(): Notification {
@@ -672,9 +744,6 @@ class GateKeeperVpnService : VpnService() {
         val blockedCount: StateFlow<Long> = _blockedCount.asStateFlow()
 
         private val notifDedup = java.util.concurrent.ConcurrentHashMap<String, Long>()
-        // One notification per blocked app per 10 minutes maximum
         private const val NOTIF_DEDUP_MS = 10 * 60 * 1000L
-        
-        private const val RECONNECT_HOLD_MS = 500L
     }
 }

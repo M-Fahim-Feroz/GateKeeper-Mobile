@@ -89,36 +89,12 @@ class DashboardViewModel @Inject constructor(
     val isEvilTwinEnabled: StateFlow<Boolean> = settingsRepository.evilTwinDetectionFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
-    // Security Score computation
-    // VPN off = max 65 (device is unprotected regardless of other settings)
-    // Rogue cert = -20 (active MITM risk)
-    // Critical alerts = -20 each (capped at -40)
-    // High alerts = -8 each (capped at -24)
-    // DNS leak protection off = -5
-    // IMSI detection off = -5
-    val securityScore: Flow<Int> = combine(
-        GateKeeperVpnService.isRunning,
-        unresolvedAlerts,
-        rogueCertsCount,
-        isDnsLeakEnabled,
-        isImsiDetectionEnabled
-    ) { isVpnRunning, alerts, rogueCerts, dnsLeak, imsi ->
-        val base = if (isVpnRunning) 100 else 65
-        var score = base
-        val criticals = alerts.count { it.severity == "CRITICAL" }
-        val highs = alerts.count { it.severity == "HIGH" }
-        score -= (criticals * 20).coerceAtMost(40)
-        score -= (highs * 8).coerceAtMost(24)
-        if (rogueCerts > 0) score -= 20
-        if (!dnsLeak) score -= 5
-        if (!imsi) score -= 5
-        score.coerceIn(0, 100)
-    }
+
 
     fun rescanCerts() {
         viewModelScope.launch {
-            val certs = certificateAuditor.auditUserCertificates()
-            _rogueCertsCount.value = certs.size
+            val (_, userCerts) = certificateAuditor.auditCertificates()
+            _rogueCertsCount.value = userCerts.size
         }
     }
 

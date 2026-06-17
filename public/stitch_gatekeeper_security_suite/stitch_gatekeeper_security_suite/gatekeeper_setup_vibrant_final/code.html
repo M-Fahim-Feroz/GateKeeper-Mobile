@@ -1,0 +1,269 @@
+<!DOCTYPE html><html class="dark" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
+<title>GateKeeper - Onboarding</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-high": "#262a31",
+                        "outline-variant": "#3c494e",
+                        "on-secondary": "#370096",
+                        "primary-fixed": "#b4ebff",
+                        "on-primary-fixed": "#001f27",
+                        "tertiary-container": "#37df66",
+                        "on-surface-variant": "#bbc9cf",
+                        "on-surface": "#dfe2eb",
+                        "on-error-container": "#ffdad6",
+                        "surface-bright": "#353940",
+                        "secondary-fixed": "#e8deff",
+                        "on-tertiary-fixed": "#002108",
+                        "on-primary-container": "#00586b",
+                        "outline": "#859398",
+                        "on-primary-fixed-variant": "#004e5f",
+                        "primary-container": "#00d4ff",
+                        "error": "#ffb4ab",
+                        "tertiary-fixed": "#69ff87",
+                        "surface": "#10141a",
+                        "surface-tint": "#3cd7ff",
+                        "surface-container-lowest": "#05070A",
+                        "tertiary-fixed-dim": "#3ce36a",
+                        "on-secondary-fixed-variant": "#4f00d0",
+                        "primary-fixed-dim": "#3cd7ff",
+                        "on-tertiary-container": "#005d23",
+                        "on-background": "#dfe2eb",
+                        "inverse-surface": "#dfe2eb",
+                        "surface-container-highest": "#31353c",
+                        "on-error": "#690005",
+                        "inverse-primary": "#00677e",
+                        "secondary-container": "#5203d5",
+                        "surface-container": "#1c2026",
+                        "tertiary": "#5bfc80",
+                        "background": "#05070A",
+                        "error-container": "#93000a",
+                        "surface-container-low": "#181c22",
+                        "on-secondary-fixed": "#20005f",
+                        "surface-variant": "#31353c",
+                        "secondary": "#cdbdff",
+                        "on-tertiary": "#003912",
+                        "inverse-on-surface": "#2d3137",
+                        "surface-dim": "#10141a",
+                        "primary": "#a8e8ff",
+                        "on-tertiary-fixed-variant": "#00531e",
+                        "on-secondary-container": "#c0acff",
+                        "secondary-fixed-dim": "#cdbdff",
+                        "on-primary": "#003642"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-gap": "16px",
+                        "container-margin": "20px",
+                        "safe-area-bottom": "32px",
+                        "grid-gutter": "12px",
+                        "inner-padding": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Inter"],
+                        "body-md": ["Inter"],
+                        "title-lg": ["Inter"],
+                        "label-caps": ["Inter"],
+                        "headline-md": ["Inter"],
+                        "headline-lg-mobile": ["Inter"],
+                        "body-sm": ["Inter"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #05070A;
+            background-image: radial-gradient(circle at 50% -20%, rgba(0, 212, 255, 0.15) 0%, #05070A 70%);
+            color: #dfe2eb; /* on-background */
+        }
+        
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(0, 212, 255, 0.15);
+            background-image: linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+            box-shadow: inset 0 0 20px rgba(0, 212, 255, 0.02);
+        }
+
+        .glow-effect {
+            position: relative;
+        }
+        
+        .glow-effect::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 120%;
+            height: 120%;
+            background: rgba(0, 212, 255, 0.25);
+            filter: blur(24px);
+            z-index: -1;
+            border-radius: 50%;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #00D4FF 0%, #008eb3 100%);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:active {
+            transform: scale(0.98);
+            opacity: 0.9;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .btn-ghost:active {
+            background: rgba(255, 255, 255, 0.05);
+            transform: scale(0.98);
+        }
+
+        .progress-bar-fill {
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .live-progress {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .live-progress::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+            animation: shimmer 2s infinite;
+        }
+        
+        @keyframes shimmer {
+            100% { left: 100%; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col font-sans antialiased selection:bg-primary-container selection:text-on-primary-container" style="background-color: rgb(5, 7, 10); background-image: radial-gradient(circle at 50% -20%, rgba(0, 212, 255, 0.25) 0%, rgb(5, 7, 10) 85%); color: rgb(223, 226, 235);">
+<!-- Top Navigation for Onboarding (Close/Back context, no global nav shell) -->
+<header class="w-full flex justify-between items-center px-container-margin pt-6 pb-4">
+<button aria-label="Go back" class="w-10 h-10 flex items-center justify-center rounded-full glass-card hover:bg-white/5 transition-colors border-none bg-white/5">
+<span class="material-symbols-outlined text-on-surface" style="font-variation-settings: 'FILL' 0;">arrow_back</span>
+</button>
+<button aria-label="Skip onboarding" class="font-label-caps text-label-caps text-on-surface-variant hover:text-primary transition-colors uppercase">
+            Skip
+        </button>
+</header>
+<!-- Main Content Area -->
+<main class="flex-grow flex flex-col justify-center px-container-margin relative z-10 w-full max-w-md mx-auto">
+<!-- Animated Hero Element -->
+<div class="flex justify-center mb-10 relative">
+<div class="w-32 h-32 rounded-full glass-card flex items-center justify-center glow-effect shadow-2xl relative z-10 border border-primary-container/50 bg-surface-container-high/60 backdrop-blur-md">
+<span class="material-symbols-outlined text-[64px] text-primary-container drop-shadow-[0_0_12px_rgba(0,212,255,0.6)] drop-shadow-[0_0_20px_rgba(0,212,255,0.8)]" style="font-variation-settings: &quot;FILL&quot; 1;">security</span>
+</div>
+<!-- Decorative orbiting elements for visual interest -->
+<div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 border border-primary-container/20 rounded-full z-0 animate-[spin_10s_linear_infinite]">
+<div class="absolute top-0 left-1/2 w-2 h-2 bg-primary-container rounded-full shadow-[0_0_10px_#00d4ff]"></div>
+</div>
+</div>
+<!-- Typography Context -->
+<div class="text-center mb-10">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-white mb-4 tracking-tight drop-shadow-md">
+                Grant VPN Permission
+            </h1>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-[280px] mx-auto leading-relaxed text-on-surface">
+                To secure your connection and block threats, GateKeeper needs permission to establish a local VPN.
+            </p>
+</div>
+<!-- Detail Card -->
+<div class="glass-card rounded-2xl p-inner-padding mb-8 bg-white/10">
+<ul class="space-y-6">
+<li class="flex items-start gap-4 group relative cursor-pointer">
+<div class="w-10 h-10 rounded-full bg-tertiary-container/25 flex items-center justify-center shrink-0 border border-tertiary-container/50 group-hover:bg-tertiary-container/40 transition-colors shadow-[0_0_12px_rgba(55,223,102,0.3)]">
+<span class="material-symbols-outlined text-[20px] text-tertiary-container" style="font-variation-settings: 'FILL' 1;">lock</span>
+</div>
+<div class="pt-1">
+<div class="flex items-center gap-2 mb-1">
+<h3 class="font-title-lg text-title-lg text-white">Encrypts Traffic</h3>
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant/50 group-hover:text-primary-container transition-colors">info</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant/90 leading-relaxed">Protects your data from snooping on public Wi-Fi networks.</p>
+</div>
+<!-- Tooltip -->
+<div class="absolute -top-12 left-14 bg-surface-container-high text-on-surface text-xs py-2 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl border border-white/10 z-50 whitespace-nowrap backdrop-blur-md">
+<span class="font-semibold text-primary-container">AES-256-GCM</span> encryption protocol
+</div>
+</li>
+<li class="flex items-start gap-4 group relative cursor-pointer">
+<div class="w-10 h-10 rounded-full bg-primary-container/25 flex items-center justify-center shrink-0 border border-primary-container/50 group-hover:bg-primary-container/40 transition-colors shadow-[0_0_12px_rgba(0,212,255,0.3)]">
+<span class="material-symbols-outlined text-[20px] text-primary-container" style="font-variation-settings: 'FILL' 1;">shield_locked</span>
+</div>
+<div class="pt-1">
+<div class="flex items-center gap-2 mb-1">
+<h3 class="font-title-lg text-title-lg text-white">Blocks Trackers</h3>
+<span class="material-symbols-outlined text-[16px] text-on-surface-variant/50 group-hover:text-primary-container transition-colors">info</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant/90 leading-relaxed">Stops malicious domains before they can load on your device.</p>
+</div>
+<!-- Tooltip -->
+<div class="absolute -top-12 left-14 bg-surface-container-high text-on-surface text-xs py-2 px-3 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none shadow-xl border border-white/10 z-50 whitespace-nowrap backdrop-blur-md">
+DNS-level filtering active
+</div>
+</li>
+</ul>
+</div>
+</main>
+<!-- Bottom Action Area & Progress -->
+<footer class="w-full px-container-margin pb-safe-area-bottom pt-4 mt-auto">
+<!-- Primary Action -->
+<button class="w-full btn-primary text-[#05070A] font-title-lg text-title-lg py-4 rounded-xl flex items-center justify-center gap-2 mb-8 shadow-[0_4px_32px_rgba(0,212,255,0.3)] hover:shadow-[0_4px_40px_rgba(0,212,255,0.4)] border border-primary-container/50 shadow-[0_0_25px_rgba(0,212,255,0.5)]">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">vpn_key</span>
+            Continue Setup
+        </button>
+<!-- Progress Indicator -->
+<div class="flex flex-col items-center gap-4">
+<div class="flex gap-2">
+<div class="w-10 h-1.5 rounded-full bg-primary-container live-progress shadow-[0_0_8px_rgba(0,212,255,0.5)]"></div>
+<div class="w-10 h-1.5 rounded-full bg-surface-variant/50"></div>
+<div class="w-10 h-1.5 rounded-full bg-surface-variant/50"></div>
+</div>
+<span class="font-label-caps text-label-caps text-on-surface-variant/80 uppercase tracking-[0.15em]">
+                Step 1 of 3
+            </span>
+</div>
+</footer>
+
+
+</body></html>

@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import com.gatekeeper.mobile.data.repository.SettingsRepository
@@ -39,8 +40,8 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
 
         _deepLinkRoute.value = intent.getStringExtra("target_route")
 
@@ -62,9 +63,17 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val onboardingDone by settingsRepository.onboardingDoneFlow.collectAsState(initial = false)
+            val themeMode by settingsRepository.themeModeFlow.collectAsState(initial = 0)
             val deepLink by _deepLinkRoute.collectAsState()
 
-            GateKeeperTheme {
+            val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val isDarkTheme = when (themeMode) {
+                1 -> false
+                2 -> true
+                else -> isSystemDark
+            }
+
+            GateKeeperTheme(darkTheme = isDarkTheme) {
                 AppNavigation(
                     startDestination = if (onboardingDone) "dashboard" else "onboarding",
                     deepLinkRoute = deepLink,

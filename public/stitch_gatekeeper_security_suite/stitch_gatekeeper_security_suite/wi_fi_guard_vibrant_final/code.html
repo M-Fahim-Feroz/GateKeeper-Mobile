@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>GateKeeper - Wi-Fi Guard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-container-high": "#232a2c",
+                        "outline-variant": "#3e484a",
+                        "on-secondary": "#1d2e5a",
+                        "primary-fixed": "#a2eeff",
+                        "on-primary-fixed": "#001f26",
+                        "tertiary-container": "#48fcd4",
+                        "on-surface-variant": "#bfc8ca",
+                        "on-surface": "#dee3e5",
+                        "on-error-container": "#ffdad6",
+                        "surface-bright": "#333a3d",
+                        "secondary-fixed": "#dae2ff",
+                        "on-tertiary-fixed": "#002018",
+                        "on-primary-container": "#004e5f",
+                        "outline": "#899294",
+                        "on-primary-fixed-variant": "#004e5f",
+                        "primary-container": "#00323e",
+                        "error": "#ffb4ab",
+                        "tertiary-fixed": "#69fad2",
+                        "surface": "#0e1417",
+                        "surface-tint": "#24d3ff",
+                        "surface-container-lowest": "#080f12",
+                        "tertiary-fixed-dim": "#48fcd4",
+                        "on-secondary-fixed-variant": "#344573",
+                        "primary-fixed-dim": "#24d3ff",
+                        "on-tertiary-container": "#00513e",
+                        "on-background": "#dee3e5",
+                        "inverse-surface": "#dee3e5",
+                        "surface-container-highest": "#2e3537",
+                        "on-error": "#690005",
+                        "inverse-primary": "#00677d",
+                        "secondary-container": "#031742",
+                        "surface-container": "#1a2123",
+                        "tertiary": "#48fcd4",
+                        "background": "#05070A",
+                        "error-container": "#93000a",
+                        "surface-container-low": "#161d1f",
+                        "on-secondary-fixed": "#00184a",
+                        "surface-variant": "#3e484a",
+                        "secondary": "#aec6ff",
+                        "on-tertiary": "#003829",
+                        "inverse-on-surface": "#2a3134",
+                        "surface-dim": "#0e1417",
+                        "primary": "#24d3ff",
+                        "on-tertiary-fixed-variant": "#00513e",
+                        "on-secondary-container": "#aec6ff",
+                        "secondary-fixed-dim": "#aec6ff",
+                        "on-primary": "#003542"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "1rem",
+                        "lg": "1.5rem",
+                        "xl": "2rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "stack-gap": "16px",
+                        "container-margin": "20px",
+                        "safe-area-bottom": "32px",
+                        "grid-gutter": "12px",
+                        "inner-padding": "24px"
+                    },
+                    "fontFamily": {
+                        "headline-lg": ["Geist"],
+                        "body-md": ["Geist"],
+                        "title-lg": ["Geist"],
+                        "label-caps": ["Geist"],
+                        "headline-md": ["Geist"],
+                        "headline-lg-mobile": ["Geist"],
+                        "body-sm": ["Geist"]
+                    },
+                    "fontSize": {
+                        "headline-lg": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "500" }],
+                        "title-lg": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "label-caps": ["12px", { "lineHeight": "16px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-md": ["24px", { "lineHeight": "32px", "fontWeight": "600" }],
+                        "headline-lg-mobile": ["28px", { "lineHeight": "34px", "letterSpacing": "-0.01em", "fontWeight": "700" }],
+                        "body-sm": ["14px", { "lineHeight": "20px", "fontWeight": "400" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            background-color: #05070A;
+            color: #dee3e5;
+            min-height: 100vh;
+        }
+
+        /* Glass Card Base Styles */
+        .glass-card {
+            background: rgba(22, 29, 31, 0.4);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
+            overflow: hidden;
+            border-radius: 24px;
+        }
+
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
+            pointer-events: none;
+        }
+
+        /* Glow Effects */
+        .glow-active {
+            position: relative;
+        }
+        .glow-active::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 80%;
+            height: 100%;
+            transform: translateX(-50%);
+            background: radial-gradient(ellipse at top, rgba(36, 211, 255, 0.15) 0%, rgba(36, 211, 255, 0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .glow-danger::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 80%;
+            height: 100%;
+            transform: translateX(-50%);
+            background: radial-gradient(ellipse at top, rgba(255, 180, 171, 0.1) 0%, rgba(255, 180, 171, 0) 70%);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .icon-container-teal {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(36, 211, 255, 0.1) 0%, rgba(36, 211, 255, 0.02) 100%);
+            border: 1px solid rgba(36, 211, 255, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #24d3ff;
+            box-shadow: inset 0 2px 10px rgba(36, 211, 255, 0.1);
+        }
+        
+        .icon-container-danger {
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, rgba(255, 180, 171, 0.1) 0%, rgba(255, 180, 171, 0.02) 100%);
+            border: 1px solid rgba(255, 180, 171, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffb4ab;
+            box-shadow: inset 0 2px 10px rgba(255, 180, 171, 0.1);
+        }
+
+        .pulse-animation {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.5; }
+            50% { opacity: 1; }
+            100% { opacity: 0.5; }
+        }
+    </style>
+</head>
+<body class="antialiased pb-safe-area-bottom">
+<!-- TopAppBar -->
+<header class="fixed top-0 w-full z-50 flex justify-between items-center px-container-margin h-16 bg-[#05070A]/80 backdrop-blur-2xl border-b border-white/5 docked full-width">
+<button class="text-primary hover:opacity-80 transition-opacity active:scale-95 flex items-center justify-center p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="shield">shield</span>
+</button>
+<h1 class="font-headline-md text-[20px] font-bold tracking-tight text-white">GateKeeper</h1>
+<button class="text-on-surface-variant hover:opacity-80 transition-opacity active:scale-95 flex items-center justify-center p-2 rounded-full">
+<span class="material-symbols-outlined" data-icon="account_circle">account_circle</span>
+</button>
+</header>
+<!-- Main Content Canvas -->
+<main class="pt-24 px-container-margin pb-32 flex flex-col gap-stack-gap max-w-4xl mx-auto">
+<!-- Header Section -->
+<div class="flex items-center gap-4 mb-4 pl-2">
+<div class="icon-container-teal">
+<span class="material-symbols-outlined text-[28px]" style="font-variation-settings: 'FILL' 1;">wifi</span>
+</div>
+<div>
+<h2 class="font-headline-md text-headline-md text-white font-bold">Wi-Fi Guard</h2>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Monitoring network integrity</p>
+</div>
+</div>
+<!-- Open Network Warning Banner -->
+<div class="glass-card p-4 flex items-start gap-4 border border-error/20 bg-error/5 relative">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-error pulse-animation"></div>
+<span class="material-symbols-outlined text-error mt-1" style="font-variation-settings: 'FILL' 1;">warning</span>
+<div>
+<h3 class="font-title-lg text-[18px] text-error mb-1 font-semibold">Open Network Detected</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant">You are connected to a network with weak security. Consider using a VPN for sensitive transactions.</p>
+</div>
+</div>
+<!-- Current Connected Network -->
+<section class="glass-card p-inner-padding glow-active border border-primary/20 bg-gradient-to-b from-primary/5 to-transparent">
+<div class="flex justify-between items-start mb-8">
+<div>
+<div class="flex items-center gap-2 mb-2">
+<p class="font-label-caps text-label-caps text-primary tracking-widest uppercase">Current Connection</p>
+<span class="material-symbols-outlined text-primary text-[14px]">info</span>
+</div>
+<h3 class="font-headline-md text-[28px] text-white font-bold flex items-center gap-2">
+                        HomeNetwork_5G
+</h3>
+</div>
+<div class="px-4 py-1.5 rounded-full bg-tertiary/10 border border-tertiary/20 flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-tertiary pulse-animation shadow-[0_0_8px_rgba(72,252,212,0.8)]"></div>
+<span class="font-label-caps text-label-caps text-tertiary font-bold tracking-wider">SAFE</span>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-4">
+<div class="p-5 rounded-[20px] bg-surface-container/60 border border-white/5 relative overflow-hidden group hover:border-primary/30 transition-colors">
+<div class="flex items-center justify-between mb-2">
+<p class="font-label-caps text-[11px] text-on-surface-variant tracking-wider">BSSID</p>
+<span class="material-symbols-outlined text-on-surface-variant/50 text-[16px]">info</span>
+</div>
+<p class="font-body-md text-body-md text-white font-mono text-[15px] opacity-90">00:1A:2B:3C:4D:5E</p>
+</div>
+<div class="p-5 rounded-[20px] bg-surface-container/60 border border-white/5 relative overflow-hidden group hover:border-primary/30 transition-colors">
+<div class="flex items-center justify-between mb-2">
+<p class="font-label-caps text-[11px] text-on-surface-variant tracking-wider">SECURITY</p>
+<span class="material-symbols-outlined text-on-surface-variant/50 text-[16px]">info</span>
+</div>
+<p class="font-body-md text-[15px] text-white font-semibold">WPA3-Personal</p>
+</div>
+<div class="p-5 rounded-[20px] bg-surface-container/60 border border-white/5 relative overflow-hidden group hover:border-primary/30 transition-colors">
+<div class="flex items-center justify-between mb-2">
+<p class="font-label-caps text-[11px] text-on-surface-variant tracking-wider">SIGNAL STRENGTH</p>
+<span class="material-symbols-outlined text-on-surface-variant/50 text-[16px]">info</span>
+</div>
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">wifi</span>
+<p class="font-body-md text-[15px] text-white font-semibold">-45 dBm (Excellent)</p>
+</div>
+</div>
+<div class="p-5 rounded-[20px] bg-surface-container/60 border border-white/5 relative overflow-hidden group hover:border-primary/30 transition-colors">
+<div class="flex items-center justify-between mb-2">
+<p class="font-label-caps text-[11px] text-on-surface-variant tracking-wider">IP ADDRESS</p>
+<span class="material-symbols-outlined text-on-surface-variant/50 text-[16px]">info</span>
+</div>
+<p class="font-body-md text-body-md text-white font-mono text-[15px] opacity-90">192.168.1.104</p>
+</div>
+</div>
+<div class="mt-8 flex justify-end">
+<button class="px-8 py-3 rounded-full bg-surface-container hover:bg-surface-container-high border border-white/10 text-white font-body-md text-[15px] font-semibold transition-all shadow-lg active:scale-95">
+                    Disconnect
+                </button>
+</div>
+</section>
+<!-- Nearby Networks -->
+<section class="mt-8">
+<div class="flex items-center justify-between mb-4 px-2">
+<h3 class="font-title-lg text-[18px] text-white font-semibold">Nearby Networks</h3>
+<button class="text-primary text-[14px] font-semibold flex items-center gap-1 hover:opacity-80 transition-opacity">
+<span class="material-symbols-outlined text-[18px]">refresh</span>
+            Scan
+        </button>
+</div>
+<div class="flex flex-col gap-3">
+<!-- Evil Twin Network (Suspicious) -->
+<div class="glass-card p-5 border border-error/20 bg-error/5 flex items-center justify-between glow-danger group hover:bg-error/10 transition-colors cursor-pointer">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center text-error border border-error/20">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">wifi_off</span>
+</div>
+<div>
+<div class="flex items-center gap-2">
+<h4 class="font-body-md text-[16px] font-semibold text-white">HomeNetwork_5G_Free</h4>
+<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-error text-[#690005] uppercase tracking-wider">Evil Twin</span>
+</div>
+<p class="font-body-sm text-[13px] text-error/80 mt-1">Suspicious MAC address clone detected</p>
+</div>
+</div>
+<div class="text-right">
+<div class="flex items-center justify-end gap-1 text-on-surface-variant mb-1">
+<span class="material-symbols-outlined text-[18px]">signal_wifi_4_bar</span>
+<span class="font-label-caps text-[11px]">-50 dBm</span>
+</div>
+<p class="font-label-caps text-[11px] text-outline tracking-wider uppercase">Open</p>
+</div>
+</div>
+<!-- Normal Network 1 -->
+<div class="glass-card p-5 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer border border-white/5 bg-surface-container/30">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant border border-white/5">
+<span class="material-symbols-outlined text-[22px]">wifi_lock</span>
+</div>
+<div>
+<h4 class="font-body-md text-[16px] font-semibold text-white">Cafe_Guest_Secure</h4>
+<p class="font-body-sm text-[13px] text-on-surface-variant mt-0.5">WPA2-Enterprise</p>
+</div>
+</div>
+<div class="text-right">
+<div class="flex items-center justify-end gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">network_wifi_3_bar</span>
+<span class="font-label-caps text-[11px]">-65 dBm</span>
+</div>
+</div>
+</div>
+<!-- Normal Network 2 -->
+<div class="glass-card p-5 flex items-center justify-between hover:bg-white/5 transition-colors cursor-pointer border border-white/5 bg-surface-container/30">
+<div class="flex items-center gap-4">
+<div class="w-12 h-12 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant border border-white/5">
+<span class="material-symbols-outlined text-[22px]">wifi_lock</span>
+</div>
+<div>
+<h4 class="font-body-md text-[16px] font-semibold text-white">Library_Public</h4>
+<p class="font-body-sm text-[13px] text-on-surface-variant mt-0.5">WEP (Weak)</p>
+</div>
+</div>
+<div class="text-right">
+<div class="flex items-center justify-end gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[18px]">network_wifi_2_bar</span>
+<span class="font-label-caps text-[11px]">-78 dBm</span>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 flex justify-around items-center px-4 pb-safe-area-bottom h-20 bg-[#05070A]/90 backdrop-blur-3xl border-t border-white/5 shadow-[0_-10px_40px_rgba(0,0,0,0.5)] docked full-width md:hidden">
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-white w-16 h-16 rounded-xl transition-colors">
+<span class="material-symbols-outlined mb-1 text-[24px]" data-icon="home">home</span>
+<span class="font-label-caps text-[10px] tracking-wider">Home</span>
+</button>
+<button class="flex flex-col items-center justify-center text-primary relative group w-20 h-16 transition-all duration-200 active:scale-95">
+<div class="absolute inset-0 bg-primary/10 rounded-2xl group-hover:bg-primary/20 transition-colors"></div>
+<span class="material-symbols-outlined mb-1 text-[24px] relative z-10" data-icon="shield" style="font-variation-settings: 'FILL' 1;">shield</span>
+<span class="font-label-caps text-[10px] tracking-wider relative z-10 font-bold">Protect</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-white w-16 h-16 rounded-xl transition-colors">
+<span class="material-symbols-outlined mb-1 text-[24px]" data-icon="bar_chart">bar_chart</span>
+<span class="font-label-caps text-[10px] tracking-wider">Activity</span>
+</button>
+<button class="flex flex-col items-center justify-center text-on-surface-variant hover:text-white w-16 h-16 rounded-xl transition-colors">
+<span class="material-symbols-outlined mb-1 text-[24px]" data-icon="settings">settings</span>
+<span class="font-label-caps text-[10px] tracking-wider">Settings</span>
+</button>
+</nav>
+</body></html>

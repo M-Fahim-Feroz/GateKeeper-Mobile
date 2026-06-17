@@ -6,7 +6,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Typography
-import com.gatekeeper.mobile.R
 
 // The downloaded inter_*.ttf files appear to be corrupted or invalid variable fonts
 // falling back to SansSerif (Roboto) to prevent "Failed to create internal object" crashes.
@@ -33,7 +32,7 @@ val GateKeeperTypography = Typography(
         fontWeight = FontWeight.Bold,
         fontSize = 22.sp,
         lineHeight = 30.sp,
-        letterSpacing = (-0.25).sp
+        letterSpacing = 0.5.sp
     ),
     headlineLarge = TextStyle(
         fontFamily = InterFontFamily,
@@ -56,7 +55,7 @@ val GateKeeperTypography = Typography(
     ),
     titleLarge = TextStyle(
         fontFamily = InterFontFamily,
-        fontWeight = FontWeight.SemiBold,
+        fontWeight = FontWeight.ExtraBold,
         fontSize = 15.sp,
         lineHeight = 22.sp,
         letterSpacing = 0.sp
@@ -115,6 +114,6 @@ val GateKeeperTypography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 9.sp,
         lineHeight = 13.sp,
-        letterSpacing = 0.5.sp
+        letterSpacing = 1.0.sp
     )
 )

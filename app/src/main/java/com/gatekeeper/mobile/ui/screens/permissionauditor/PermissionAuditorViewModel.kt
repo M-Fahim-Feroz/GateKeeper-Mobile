@@ -17,13 +17,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import com.gatekeeper.mobile.vpn.PrivacyAccessLogger
 import javax.inject.Inject
 
 @HiltViewModel
 class PermissionAuditorViewModel @Inject constructor(
     private val scanAppPermissionsUseCase: ScanAppPermissionsUseCase,
     private val sensorLogRepository: SensorLogRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val privacyAccessLogger: PrivacyAccessLogger
 ) : ViewModel() {
 
     private val _scannedApps = MutableStateFlow<List<AppPermissionInfo>>(emptyList())
@@ -58,8 +61,22 @@ class PermissionAuditorViewModel @Inject constructor(
     private val _totalCount = MutableStateFlow(0)
     val totalCount: StateFlow<Int> = _totalCount.asStateFlow()
 
+    private val _isLoading = MutableStateFlow(true)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
     init {
+        viewModelScope.launch {
+            delay(800)
+            _isLoading.value = false
+        }
         scanPermissions()
+        privacyAccessLogger.pollHistoricalAccess()
+    }
+
+    fun hasUsageStatsPermission(): Boolean = privacyAccessLogger.hasUsageStatsPermission()
+
+    fun refreshSensorData() {
+        privacyAccessLogger.pollHistoricalAccess()
     }
 
     fun scanPermissions() {
@@ -73,6 +90,33 @@ class PermissionAuditorViewModel @Inject constructor(
                 _scannedApps.value = results
             }
             _isScanning.value = false
+        }
+    }
+
+    fun simulateSensorData() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val apps = listOf(
+                Pair("com.whatsapp", "WhatsApp"),
+                Pair("com.instagram.android", "Instagram"),
+                Pair("com.google.android.maps", "Google Maps"),
+                Pair("com.snapchat.android", "Snapchat"),
+                Pair("com.facebook.katana", "Facebook")
+            )
+            val sensors = listOf("CAMERA", "MICROPHONE", "LOCATION")
+            
+            val randomApp = apps.random()
+            val randomSensor = sensors.random()
+            
+            val log = SensorLog(
+                packageName = randomApp.first,
+                appName = randomApp.second,
+                sensorType = randomSensor,
+                startedAt = System.currentTimeMillis() - (Math.random() * 1000 * 60 * 60 * 2).toLong(), // Within last 2 hours
+                durationMs = (Math.random() * 1000 * 60 * 5).toLong() + 1000L, // 1s to 5 mins
+                isBackground = Math.random() > 0.7 // 30% chance of background access
+            )
+            
+            sensorLogRepository.simulateLog(log)
         }
     }
 }

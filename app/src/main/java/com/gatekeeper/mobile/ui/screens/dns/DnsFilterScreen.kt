@@ -66,19 +66,19 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        containerColor = DarkBackground
+        containerColor = LocalGKColors.current.background
     ) { paddingValues ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(DarkBackground)
+                .background(LocalGKColors.current.background)
                 .padding(bottom = paddingValues.calculateBottomPadding())
         ) {
             // Header
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(SecondaryPurple.copy(alpha = 0.07f), DarkBackground)))
+                    .background(Brush.verticalGradient(listOf(SecondaryPurple.copy(alpha = 0.07f), LocalGKColors.current.background)))
                     .padding(horizontal = 20.dp, vertical = 20.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -91,8 +91,8 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                     }
                     Spacer(Modifier.width(12.dp))
                     Column {
-                        Text("DNS Filter", style = MaterialTheme.typography.displaySmall, color = TextPrimary)
-                        Text("Block & allow domains at DNS level", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                        Text("DNS Filter", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
+                        Text("Block & allow domains at DNS level", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
                     }
                     Spacer(Modifier.weight(1f))
                     if (selectedTab != 2) {
@@ -110,7 +110,7 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                 // VPN warning banner
                 if (!isVpnActive) {
                     Spacer(Modifier.height(14.dp))
-                    Box(Modifier.fillMaxWidth().height(3.dp).background(AccentOrange.copy(alpha = 0.7f)))
+                    Box(Modifier.fillMaxWidth().height(3.dp).background(LocalGKColors.current.accentOrange.copy(alpha = 0.7f)))
                 }
 
                 Spacer(Modifier.height(16.dp))
@@ -126,7 +126,7 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Brush.linearGradient(listOf(SecondaryPurple.copy(0.12f), Color(0xFF1A1A2E))))
+                        .background(Brush.linearGradient(listOf(SecondaryPurple.copy(0.12f), LocalGKColors.current.card)))
                         .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -139,10 +139,10 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text("Enforce SafeSearch", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                        Text("Enforce SafeSearch", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, color = LocalGKColors.current.textPrimary)
                         Text(
                             "Force Google, Bing & YouTube into strict mode",
-                            style = MaterialTheme.typography.bodySmall, color = TextSecondary
+                            style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary
                         )
                     }
                     Switch(
@@ -163,8 +163,8 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                         label = { Text("Blocklist") },
                         leadingIcon = { Icon(Icons.Filled.Block, null, modifier = Modifier.size(16.dp)) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentRed.copy(alpha = 0.15f),
-                            selectedLabelColor = AccentRed
+                            selectedContainerColor = LocalGKColors.current.accentRed.copy(alpha = 0.15f),
+                            selectedLabelColor = LocalGKColors.current.accentRed
                         )
                     )
                     FilterChip(
@@ -173,8 +173,8 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                         label = { Text("Allowlist") },
                         leadingIcon = { Icon(Icons.Filled.CheckCircle, null, modifier = Modifier.size(16.dp)) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = AccentGreen.copy(alpha = 0.15f),
-                            selectedLabelColor = AccentGreen
+                            selectedContainerColor = LocalGKColors.current.accentGreen.copy(alpha = 0.15f),
+                            selectedLabelColor = LocalGKColors.current.accentGreen
                         )
                     )
                     FilterChip(
@@ -183,8 +183,8 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                         label = { Text("Subscriptions") },
                         leadingIcon = { @Suppress("DEPRECATION") Icon(Icons.Filled.LibraryBooks, null, modifier = Modifier.size(16.dp)) },
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PrimaryCyan.copy(alpha = 0.15f),
-                            selectedLabelColor = PrimaryCyan
+                            selectedContainerColor = LocalGKColors.current.primary.copy(alpha = 0.15f),
+                            selectedLabelColor = LocalGKColors.current.primary
                         )
                     )
                 }
@@ -223,11 +223,11 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                             horizontalAlignment = Alignment.CenterHorizontally,
                             modifier = Modifier.padding(32.dp)
                         ) {
-                            Icon(Icons.Filled.Dns, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
+                            Icon(Icons.Filled.Dns, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(52.dp))
                             Spacer(Modifier.height(12.dp))
                             Text(
                                 "No rules yet",
-                                color = TextPrimary, style = MaterialTheme.typography.titleMedium,
+                                color = LocalGKColors.current.textPrimary, style = MaterialTheme.typography.titleMedium,
                                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold
                             )
                             Spacer(Modifier.height(6.dp))
@@ -236,7 +236,7 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                                     "Block ads, trackers, or malicious domains at the DNS level"
                                 else
                                     "Allow trusted domains to bypass all DNS filters",
-                                color = TextSecondary,
+                                color = LocalGKColors.current.textSecondary,
                                 style = MaterialTheme.typography.bodySmall,
                                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
@@ -244,22 +244,22 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                                 Spacer(Modifier.height(16.dp))
                                 Button(
                                     onClick = { selectedTab = 2 },
-                                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryCyan.copy(alpha = 0.15f), contentColor = PrimaryCyan)
+                                    colors = ButtonDefaults.buttonColors(containerColor = LocalGKColors.current.primary.copy(alpha = 0.15f), contentColor = LocalGKColors.current.primary)
                                 ) {
                                     Text("Browse curated lists")
                                 }
                                 Spacer(Modifier.height(8.dp))
                                 OutlinedButton(
                                     onClick = { showAddDialog = true },
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                                    border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.border)
                                 ) {
-                                    Text("Add domain manually", color = TextSecondary)
+                                    Text("Add domain manually", color = LocalGKColors.current.textSecondary)
                                 }
                             } else {
                                 Spacer(Modifier.height(16.dp))
                                 Button(
                                     onClick = { showAddDialog = true },
-                                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen.copy(alpha = 0.15f), contentColor = AccentGreen)
+                                    colors = ButtonDefaults.buttonColors(containerColor = LocalGKColors.current.accentGreen.copy(alpha = 0.15f), contentColor = LocalGKColors.current.accentGreen)
                                 ) {
                                     Text("Allow a domain")
                                 }
@@ -288,32 +288,32 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
     if (showAddDialog) {
         AlertDialog(
             onDismissRequest = { showAddDialog = false; newDomain = ""; domainError = null },
-            containerColor = DarkSurfaceVariant,
-            title = { Text(if (selectedTab == 0) "Block Domain" else "Allow Domain", color = TextPrimary) },
+            containerColor = LocalGKColors.current.surfaceVariant,
+            title = { Text(if (selectedTab == 0) "Block Domain" else "Allow Domain", color = LocalGKColors.current.textPrimary) },
             text = {
                 Column {
                     Text(
                         "Enter a domain name. The http:// and www. will be removed automatically.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = LocalGKColors.current.textSecondary
                     )
                     Spacer(Modifier.height(12.dp))
                     OutlinedTextField(
                         value = newDomain,
                         onValueChange = { newDomain = it; domainError = null },
-                        label = { Text("e.g. youtube.com or https://youtube.com", color = TextTertiary) },
+                        label = { Text("e.g. youtube.com or https://youtube.com", color = LocalGKColors.current.textTertiary) },
                         isError = domainError != null,
                         supportingText = {
                             if (domainError != null) {
-                                Text(domainError!!, color = AccentRed, style = MaterialTheme.typography.bodySmall)
+                                Text(domainError!!, color = LocalGKColors.current.accentRed, style = MaterialTheme.typography.bodySmall)
                             }
                         },
                         singleLine = true,
                         colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = if (domainError != null) AccentRed else PrimaryCyan,
-                            unfocusedBorderColor = if (domainError != null) AccentRed else GlassBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary
+                            focusedBorderColor = if (domainError != null) LocalGKColors.current.accentRed else LocalGKColors.current.primary,
+                            unfocusedBorderColor = if (domainError != null) LocalGKColors.current.accentRed else LocalGKColors.current.border,
+                            focusedTextColor = LocalGKColors.current.textPrimary,
+                            unfocusedTextColor = LocalGKColors.current.textPrimary
                         )
                     )
                 }
@@ -336,11 +336,11 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
                             )
                         }
                     }
-                }) { Text("Add", color = PrimaryCyan, fontWeight = FontWeight.Bold) }
+                }) { Text("Add", color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold) }
             },
             dismissButton = {
                 TextButton(onClick = { showAddDialog = false; newDomain = ""; domainError = null }) {
-                    Text("Cancel", color = TextSecondary)
+                    Text("Cancel", color = LocalGKColors.current.textSecondary)
                 }
             }
         )
@@ -349,12 +349,12 @@ fun DnsFilterScreen(viewModel: DnsFilterViewModel = hiltViewModel()) {
 
 @Composable
 fun DnsEntryItem(entry: DnsEntry, isBlacklisted: Boolean, onDelete: () -> Unit) {
-    val accentColor = if (isBlacklisted) AccentRed else AccentGreen
+    val accentColor = if (isBlacklisted) LocalGKColors.current.accentRed else LocalGKColors.current.accentGreen
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -367,19 +367,19 @@ fun DnsEntryItem(entry: DnsEntry, isBlacklisted: Boolean, onDelete: () -> Unit) 
             Text(
                 entry.domain,
                 style = MaterialTheme.typography.titleMedium,
-                color = TextPrimary,
+                color = LocalGKColors.current.textPrimary,
                 maxLines = 1,
                 fontWeight = FontWeight.Medium
             )
             Text(
                 if (entry.source == "user") "Added manually" else "Source: ${entry.source}",
                 style = MaterialTheme.typography.bodySmall,
-                color = TextTertiary,
+                color = LocalGKColors.current.textTertiary,
                 maxLines = 1
             )
         }
         IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
-            Icon(Icons.Filled.DeleteOutline, "Delete", tint = TextTertiary, modifier = Modifier.size(18.dp))
+            Icon(Icons.Filled.DeleteOutline, "Delete", tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(18.dp))
         }
     }
 }
@@ -395,7 +395,7 @@ fun SubscriptionItem(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -404,33 +404,33 @@ fun SubscriptionItem(
                 Text(
                     text = feed.name,
                     style = MaterialTheme.typography.titleMedium,
-                    color = TextPrimary,
+                    color = LocalGKColors.current.textPrimary,
                     fontWeight = FontWeight.Bold
                 )
                 Spacer(Modifier.width(8.dp))
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(4.dp))
-                        .background(AccentOrange.copy(alpha = 0.2f))
+                        .background(LocalGKColors.current.accentOrange.copy(alpha = 0.2f))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
-                    Text(feed.category.uppercase(), color = AccentOrange, style = MaterialTheme.typography.labelSmall)
+                    Text(feed.category.uppercase(), color = LocalGKColors.current.accentOrange, style = MaterialTheme.typography.labelSmall)
                 }
             }
             Spacer(Modifier.height(4.dp))
             Text(
                 text = feed.description,
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
+                color = LocalGKColors.current.textSecondary
             )
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Storage, null, tint = TextTertiary, modifier = Modifier.size(14.dp))
+                Icon(Icons.Filled.Storage, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
                 Text(
                     if (isEnabled && domainCount > 0) "$domainCount domains active" else feed.estimatedSize,
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (isEnabled) AccentGreen else TextTertiary
+                    color = if (isEnabled) LocalGKColors.current.accentGreen else LocalGKColors.current.textTertiary
                 )
             }
         }
@@ -440,9 +440,9 @@ fun SubscriptionItem(
             onCheckedChange = onToggle,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = androidx.compose.ui.graphics.Color.White,
-                checkedTrackColor = AccentGreen,
-                uncheckedThumbColor = TextSecondary,
-                uncheckedTrackColor = DarkSurfaceVariant
+                checkedTrackColor = LocalGKColors.current.accentGreen,
+                uncheckedThumbColor = LocalGKColors.current.textSecondary,
+                uncheckedTrackColor = LocalGKColors.current.surfaceVariant
             )
         )
     }

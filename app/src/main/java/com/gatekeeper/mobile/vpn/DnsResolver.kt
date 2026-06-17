@@ -25,6 +25,7 @@ class DnsResolver(
     companion object {
         private const val TAG = "DnsResolver"
         private val UPSTREAM_DNS = InetAddress.getByName("8.8.8.8")
+        private val UPSTREAM_DNS_FALLBACK = InetAddress.getByName("1.1.1.1")
         private const val DNS_TIMEOUT_MS = 3000
 
         // Feature 4D: SafeSearch Enforced IPs
@@ -57,7 +58,7 @@ class DnsResolver(
             if ((flags and 0x8000) != 0 || qdCount == 0 || (flags and 0x7800) != 0) return null
 
             packet.position(dnsOffset + 12)
-            val domain = extractDomain(packet)
+            val (domain, _) = extractDomain(packet)
 
             Log.i(TAG, "DNS Sinkhole: App is blocked by Firewall → sinkholing [$domain]")
             val response = buildSinkholeResponse(
@@ -95,9 +96,22 @@ class DnsResolver(
             if ((flags and 0x8000) != 0 || qdCount == 0 || (flags and 0x7800) != 0) return null
 
             packet.position(dnsOffset + 12)
-            val domain = extractDomain(packet)
+            val (domain, qtype) = extractDomain(packet)
 
-            Log.d(TAG, "DNS: $domain")
+            Log.d(TAG, "DNS: $domain (type $qtype)")
+
+            // Force IPv4 fallback by returning an empty response for AAAA (IPv6) queries
+            if (qtype == 28) {
+                val response = buildEmptyResponse(
+                    transactionId, srcIp, dstIp, udpSrcPort, udpDstPort,
+                    packet.array(), dnsOffset, packet.position()
+                )
+                synchronized(writeLock) {
+                    outputStream.write(response)
+                    outputStream.flush()
+                }
+                return domain
+            }
 
             if (isDomainBlocked(domain)) {
                 Log.i(TAG, "DNS Sinkhole: Blocking domain [$domain]")
@@ -181,7 +195,7 @@ class DnsResolver(
         try {
             socket = DatagramSocket()
 
-            // CRITICAL: protect() lets this socket exit the VPN tunnel to reach 8.8.8.8 directly.
+            // CRITICAL: protect() lets this socket exit the VPN tunnel to reach upstream directly.
             // Without this, the DNS query loops back into the VPN endlessly.
             val protected = vpnService.protect(socket)
             if (!protected) {
@@ -191,15 +205,21 @@ class DnsResolver(
 
             socket.soTimeout = DNS_TIMEOUT_MS
 
-            // Send the raw DNS query to 8.8.8.8
-            socket.send(DatagramPacket(dnsPayload, dnsPayload.size, UPSTREAM_DNS, 53))
-
             // Receive the real DNS answer
             // CRITICAL FIX: DNS responses with EDNS0 (like LinkedIn's) can be up to 4096 bytes.
             // Using a 1500 byte buffer silently truncates them, causing app timeouts.
             val recvBuf = ByteArray(65535)
             val recvPacket = DatagramPacket(recvBuf, recvBuf.size)
-            socket.receive(recvPacket)
+
+            try {
+                // Send the raw DNS query to 8.8.8.8
+                socket.send(DatagramPacket(dnsPayload, dnsPayload.size, UPSTREAM_DNS, 53))
+                socket.receive(recvPacket)
+            } catch (e: java.net.SocketTimeoutException) {
+                Log.w(TAG, "Primary DNS timed out, trying fallback 1.1.1.1...")
+                socket.send(DatagramPacket(dnsPayload, dnsPayload.size, UPSTREAM_DNS_FALLBACK, 53))
+                socket.receive(recvPacket)
+            }
 
             val answerLen = recvPacket.length
             val totalLen = 20 + 8 + answerLen
@@ -242,7 +262,7 @@ class DnsResolver(
         }
     }
 
-    private fun extractDomain(packet: ByteBuffer): String {
+    private fun extractDomain(packet: ByteBuffer): Pair<String, Int> {
         val parts = mutableListOf<String>()
         var len = packet.get().toInt() and 0xFF
         while (len > 0) {
@@ -251,8 +271,12 @@ class DnsResolver(
             parts.add(String(label, Charsets.US_ASCII))
             len = packet.get().toInt() and 0xFF
         }
-        if (packet.remaining() >= 4) packet.position(packet.position() + 4) // skip QTYPE + QCLASS
-        return parts.joinToString(".")
+        var qtype = 0
+        if (packet.remaining() >= 4) {
+            qtype = packet.short.toInt() and 0xFFFF
+            packet.short // skip QCLASS
+        }
+        return Pair(parts.joinToString("."), qtype)
     }
 
     private fun buildSinkholeResponse(
@@ -309,6 +333,55 @@ class DnsResolver(
         buf.putInt(60)                 // TTL 60 seconds
         buf.putShort(4.toShort())      // RDLENGTH
         buf.put(ipOverride)
+
+        return buf.array()
+    }
+
+    private fun buildEmptyResponse(
+        transactionId: Short,
+        origSrcIp: ByteArray,
+        origDstIp: ByteArray,
+        origSrcPort: Int,
+        origDstPort: Int,
+        originalPacket: ByteArray,
+        dnsOffset: Int,
+        questionEndOffset: Int
+    ): ByteArray {
+        val questionLen = questionEndOffset - dnsOffset
+        val dnsRespLen = questionLen  // question + 0 answers
+        val totalLen = 20 + 8 + dnsRespLen
+
+        val buf = ByteBuffer.allocate(totalLen)
+
+        // IPv4 header
+        buf.put(0x45.toByte())
+        buf.put(0x00.toByte())
+        buf.putShort(totalLen.toShort())
+        buf.putShort(0x0000.toShort())
+        buf.putShort(0x4000.toShort())
+        buf.put(64.toByte())
+        buf.put(17.toByte())
+        buf.putShort(0.toShort())
+        buf.put(origDstIp)  // src = fake DNS
+        buf.put(origSrcIp)  // dst = app
+        buf.putShort(10, calculateChecksum(buf.array(), 0, 20))
+
+        // UDP header
+        buf.putShort(origDstPort.toShort())
+        buf.putShort(origSrcPort.toShort())
+        buf.putShort((8 + dnsRespLen).toShort())
+        buf.putShort(0.toShort())
+
+        // DNS header
+        buf.putShort(transactionId)
+        buf.putShort(0x8180.toShort()) // Standard response, No error
+        buf.putShort(1.toShort())      // QDCOUNT
+        buf.putShort(0.toShort())      // ANCOUNT = 0
+        buf.putShort(0.toShort())
+        buf.putShort(0.toShort())
+
+        // DNS Question (verbatim copy)
+        buf.put(originalPacket, dnsOffset + 12, questionLen - 12)
 
         return buf.array()
     }

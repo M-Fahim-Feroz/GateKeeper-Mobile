@@ -7,8 +7,11 @@ import android.net.VpnService
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -25,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -42,27 +46,68 @@ fun OnboardingScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(DarkBg)
+            .background(LocalGKColors.current.background)
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        when (currentStep) {
-            0 -> StepWelcome { viewModel.nextStep() }
-            1 -> StepVpn(viewModel)
-            2 -> StepProtection(viewModel)
-            3 -> StepDone(viewModel, onComplete)
+        AnimatedContent(
+            targetState = currentStep,
+            transitionSpec = {
+                slideIntoContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(500)
+                ) togetherWith slideOutOfContainer(
+                    AnimatedContentTransitionScope.SlideDirection.Left,
+                    animationSpec = tween(500)
+                )
+            },
+            modifier = Modifier.weight(1f)
+        ) { targetStep ->
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                when (targetStep) {
+                    0 -> StepWelcome { viewModel.nextStep() }
+                    1 -> StepVpn(viewModel)
+                    2 -> StepProtection(viewModel)
+                    3 -> StepDone(viewModel, onComplete)
+                }
+            }
+        }
+        
+        Row(
+            modifier = Modifier.padding(bottom = 32.dp),
+            horizontalArrangement = Arrangement.Center
+        ) {
+            for (i in 0..3) {
+                val color by animateColorAsState(if (i == currentStep) LocalGKColors.current.primary else LocalGKColors.current.border)
+                val width by animateDpAsState(if (i == currentStep) 24.dp else 8.dp)
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 4.dp)
+                        .size(width = width, height = 8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(color)
+                )
+            }
         }
     }
 }
 
 @Composable
 fun StepWelcome(onNext: () -> Unit) {
-    Icon(Icons.Filled.Security, contentDescription = null, tint = PrimaryCyan, modifier = Modifier.size(80.dp))
+    Image(
+        painter = painterResource(id = if (androidx.compose.foundation.isSystemInDarkTheme()) com.gatekeeper.mobile.R.drawable.gk_logo_dark else com.gatekeeper.mobile.R.drawable.gk_logo_light),
+        contentDescription = "GateKeeper Logo",
+        modifier = Modifier.size(120.dp)
+    )
     Spacer(modifier = Modifier.height(24.dp))
-    Text("Mobile Security Suite", style = MaterialTheme.typography.headlineMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+    Text("Mobile Security Suite", style = MaterialTheme.typography.headlineMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
     Spacer(modifier = Modifier.height(12.dp))
-    Text("Protect your device in 60 seconds", style = MaterialTheme.typography.bodyLarge, color = TextSecondary)
+    Text("Protect your device in 60 seconds", style = MaterialTheme.typography.bodyLarge, color = LocalGKColors.current.textSecondary)
     Spacer(modifier = Modifier.height(48.dp))
     GKPrimaryButton("Get Started", onClick = onNext)
 }
@@ -97,11 +142,11 @@ fun StepVpn(viewModel: OnboardingViewModel) {
         }
     }
 
-    Icon(Icons.Filled.Shield, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(80.dp))
+    Icon(Icons.Filled.Shield, contentDescription = null, tint = LocalGKColors.current.accentOrange, modifier = Modifier.size(80.dp))
     Spacer(modifier = Modifier.height(24.dp))
-    Text("Enable Protection", style = MaterialTheme.typography.headlineMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+    Text("Enable Protection", style = MaterialTheme.typography.headlineMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
     Spacer(modifier = Modifier.height(12.dp))
-    Text("GateKeeper uses a local VPN — your traffic never leaves your device.", style = MaterialTheme.typography.bodyLarge, color = TextSecondary, textAlign = TextAlign.Center)
+    Text("GateKeeper uses a local VPN — your traffic never leaves your device.", style = MaterialTheme.typography.bodyLarge, color = LocalGKColors.current.textSecondary, textAlign = TextAlign.Center)
     
     Spacer(modifier = Modifier.height(48.dp))
 
@@ -111,10 +156,10 @@ fun StepVpn(viewModel: OnboardingViewModel) {
         }
         VpnPermState.DENIED -> {
             Column(
-                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(DarkSurfaceVariant).padding(16.dp),
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(LocalGKColors.current.surfaceVariant).padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("GateKeeper needs this to block apps. Without it, monitoring only — no blocking.", color = TextPrimary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                Text("GateKeeper needs this to block apps. Without it, monitoring only — no blocking.", color = LocalGKColors.current.textPrimary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(16.dp))
                 GKPrimaryButton("Try Again", onClick = requestVpn)
                 Spacer(modifier = Modifier.height(8.dp))
@@ -123,10 +168,10 @@ fun StepVpn(viewModel: OnboardingViewModel) {
         }
         VpnPermState.PERMANENTLY_DENIED -> {
             Column(
-                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(DarkSurfaceVariant).padding(16.dp),
+                modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(LocalGKColors.current.surfaceVariant).padding(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Text("Open Settings → Apps → GateKeeper → Permissions → VPN", color = TextPrimary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                Text("Open Settings → Apps → GateKeeper → Permissions → VPN", color = LocalGKColors.current.textPrimary, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
                 Spacer(modifier = Modifier.height(16.dp))
                 GKPrimaryButton("Open Settings", onClick = {
                     val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
@@ -149,7 +194,7 @@ fun StepVpn(viewModel: OnboardingViewModel) {
 fun StepProtection(viewModel: OnboardingViewModel) {
     val selected by viewModel.selectedProtectionLevel.collectAsState()
 
-    Text("Choose Protection Level", style = MaterialTheme.typography.headlineMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+    Text("Choose Protection Level", style = MaterialTheme.typography.headlineMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
     Spacer(modifier = Modifier.height(24.dp))
 
     ProtectionCard(
@@ -184,24 +229,24 @@ fun ProtectionCard(title: String, description: String, isSelected: Boolean, onCl
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(if (isSelected) PrimaryCyan.copy(alpha = 0.1f) else DarkCard)
-            .border(2.dp, if (isSelected) PrimaryCyan else BorderDefault, RoundedCornerShape(12.dp))
+            .background(if (isSelected) LocalGKColors.current.primary.copy(alpha = 0.1f) else LocalGKColors.current.card)
+            .border(2.dp, if (isSelected) LocalGKColors.current.primary else LocalGKColors.current.border, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.titleMedium, color = if (isSelected) PrimaryCyan else TextPrimary, fontWeight = FontWeight.Bold)
+                Text(title, style = MaterialTheme.typography.titleMedium, color = if (isSelected) LocalGKColors.current.primary else LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
-                Text(description, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+                Text(description, style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textSecondary)
             }
             if (isSelected) {
-                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = PrimaryCyan)
+                Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = LocalGKColors.current.primary)
             }
         }
         if (isSelected && extraInfo != null) {
             Spacer(modifier = Modifier.height(12.dp))
-            Text(extraInfo, style = MaterialTheme.typography.bodySmall, color = AccentOrange)
+            Text(extraInfo, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.accentOrange)
         }
     }
 }
@@ -213,15 +258,15 @@ fun StepDone(viewModel: OnboardingViewModel, onComplete: () -> Unit) {
     val isVpnOn = vpnState == VpnPermState.GRANTED
     
     val shieldColor by animateColorAsState(
-        targetValue = if (isVpnOn) AccentGreen else AccentOrange,
+        targetValue = if (isVpnOn) LocalGKColors.current.accentGreen else LocalGKColors.current.accentOrange,
         animationSpec = tween(800)
     )
 
     Icon(Icons.Filled.Shield, contentDescription = null, tint = shieldColor, modifier = Modifier.size(100.dp))
     Spacer(modifier = Modifier.height(24.dp))
-    Text("You're Protected", style = MaterialTheme.typography.headlineMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+    Text("You're Protected", style = MaterialTheme.typography.headlineMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
     Spacer(modifier = Modifier.height(12.dp))
-    Text("Security Score: ${if (isVpnOn) "85" else "45"}", style = MaterialTheme.typography.titleLarge, color = shieldColor)
+    Text("Your device is now secured by GateKeeper.", style = MaterialTheme.typography.bodyLarge, color = LocalGKColors.current.textSecondary)
     
     Spacer(modifier = Modifier.height(48.dp))
     GKPrimaryButton("Go to Dashboard", onClick = { viewModel.completeOnboarding(onComplete) })

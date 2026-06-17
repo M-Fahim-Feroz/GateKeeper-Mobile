@@ -135,8 +135,12 @@ class ThreatFeedViewModel @Inject constructor(
 
     fun removeFeed(sourceUrl: String) {
         viewModelScope.launch {
-            repository.removeFeed(sourceUrl)
-            _importStatus.value = "Feed removed."
+            try {
+                repository.removeFeed(sourceUrl)
+                _importStatus.value = "Feed removed."
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
     
@@ -146,7 +150,11 @@ class ThreatFeedViewModel @Inject constructor(
 
     fun clearAll() {
         viewModelScope.launch {
-            repository.deleteAll()
+            try {
+                repository.deleteAll()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 }

@@ -22,6 +22,9 @@ class CellularMonitor @Inject constructor(
     private val scope = CoroutineScope(Dispatchers.IO)
     private var lastNetworkType: String = "UNKNOWN"
     private var alertedForDowngrade = false
+    
+    private var legacyListener: PhoneStateListener? = null
+    private var modernCallback: android.telephony.TelephonyCallback? = null
 
     companion object {
         private const val TAG = "CellularMonitor"
@@ -57,6 +60,7 @@ class CellularMonitor @Inject constructor(
         }
         @Suppress("DEPRECATION")
         tm.listen(listener, PhoneStateListener.LISTEN_DATA_CONNECTION_STATE)
+        legacyListener = listener
     }
 
     private fun startModern(tm: TelephonyManager) {
@@ -69,6 +73,7 @@ class CellularMonitor @Inject constructor(
                 }
             }
             tm.registerTelephonyCallback(executor, callback)
+            modernCallback = callback
         }
     }
 
@@ -121,4 +126,22 @@ class CellularMonitor @Inject constructor(
     }
 
     fun getCurrentGeneration(): String = lastNetworkType
+
+    fun stop() {
+        try {
+            val tm = context.getSystemService(TelephonyManager::class.java) ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                modernCallback?.let { tm.unregisterTelephonyCallback(it) }
+                modernCallback = null
+            } else {
+                legacyListener?.let { 
+                    @Suppress("DEPRECATION")
+                    tm.listen(it, PhoneStateListener.LISTEN_NONE) 
+                }
+                legacyListener = null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stop cellular monitor", e)
+        }
+    }
 }

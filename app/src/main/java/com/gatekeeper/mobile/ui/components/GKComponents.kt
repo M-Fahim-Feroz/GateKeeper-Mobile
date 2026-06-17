@@ -22,9 +22,10 @@ import com.gatekeeper.mobile.ui.theme.*
 @Composable
 fun GKListRow(
     icon: ImageVector,
-    iconTint: Color = PrimaryCyan,
+    iconTint: Color = LocalGKColors.current.primary,
     title: String,
     subtitle: String,
+    badge: String? = null,
     trailing: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null
 ) {
@@ -44,9 +45,15 @@ fun GKListRow(
         Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(24.dp))
         Spacer(modifier = Modifier.width(16.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.SemiBold)
+                if (badge != null) {
+                    Spacer(modifier = Modifier.width(8.dp))
+                    GKBadge(badge, BadgeStyle.MEDIUM)
+                }
+            }
             Spacer(modifier = Modifier.height(2.dp))
-            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
         }
         if (trailing != null) {
             Spacer(modifier = Modifier.width(16.dp))
@@ -65,8 +72,8 @@ fun GKToggle(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
         colors = SwitchDefaults.colors(
             checkedThumbColor = Color.White,
             uncheckedThumbColor = Color.White,
-            checkedTrackColor = PrimaryCyan,
-            uncheckedTrackColor = DarkSurfaceVariant,
+            checkedTrackColor = LocalGKColors.current.primary,
+            uncheckedTrackColor = LocalGKColors.current.surfaceVariant,
             checkedBorderColor = Color.Transparent,
             uncheckedBorderColor = Color.Transparent
         )
@@ -82,8 +89,8 @@ fun GKBadge(text: String, style: BadgeStyle) {
         BadgeStyle.CRITICAL -> Triple(AccentRed, Color.White, null)
         BadgeStyle.HIGH -> Triple(AccentOrange, Color.White, null)
         BadgeStyle.MEDIUM -> Triple(Color.Transparent, AccentOrange, androidx.compose.foundation.BorderStroke(1.dp, AccentOrange))
-        BadgeStyle.LOW -> Triple(Color.Transparent, TextTertiary, androidx.compose.foundation.BorderStroke(1.dp, TextTertiary))
-        BadgeStyle.ALLOWED -> Triple(AccentGreen, DarkBg, null)
+        BadgeStyle.LOW -> Triple(Color.Transparent, LocalGKColors.current.textTertiary, androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.textTertiary))
+        BadgeStyle.ALLOWED -> Triple(AccentGreen, LocalGKColors.current.textOnPrimary, null)
         BadgeStyle.BLOCKED -> Triple(AccentRed, Color.White, null)
     }
     
@@ -110,7 +117,7 @@ fun GKSectionHeader(text: String) {
     Text(
         text = text.uppercase(),
         fontSize = 11.sp,
-        color = TextTertiary,
+        color = LocalGKColors.current.textTertiary,
         letterSpacing = 0.4.sp,
         fontWeight = FontWeight.Bold,
         modifier = Modifier.padding(bottom = 8.dp)
@@ -126,10 +133,10 @@ fun GKPrimaryButton(text: String, enabled: Boolean = true, onClick: () -> Unit) 
         modifier = Modifier.fillMaxWidth().height(50.dp),
         shape = RoundedCornerShape(12.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = PrimaryCyan,
-            contentColor = DarkBg,
-            disabledContainerColor = DarkSurfaceVariant,
-            disabledContentColor = TextTertiary
+            containerColor = LocalGKColors.current.primary,
+            contentColor = LocalGKColors.current.textOnPrimary,
+            disabledContainerColor = LocalGKColors.current.surfaceVariant,
+            disabledContentColor = LocalGKColors.current.textTertiary
         )
     ) {
         Text(text, fontWeight = FontWeight.Bold)
@@ -141,9 +148,9 @@ fun GKOutlineButton(text: String, onClick: () -> Unit) {
     OutlinedButton(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        border = androidx.compose.foundation.BorderStroke(0.5.dp, BorderDefault),
+        border = androidx.compose.foundation.BorderStroke(0.5.dp, LocalGKColors.current.border),
         colors = ButtonDefaults.outlinedButtonColors(
-            contentColor = TextPrimary
+            contentColor = LocalGKColors.current.textPrimary
         )
     ) {
         Text(text)
@@ -162,11 +169,11 @@ fun GKEmptyState(
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Icon(icon, contentDescription = null, tint = TextTertiary, modifier = Modifier.size(52.dp))
+        Icon(icon, contentDescription = null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(52.dp))
         Spacer(modifier = Modifier.height(12.dp))
-        Text(title, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
+        Text(title, style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textSecondary)
         Spacer(modifier = Modifier.height(4.dp))
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = TextTertiary, textAlign = TextAlign.Center)
+        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textTertiary, textAlign = TextAlign.Center)
         
         if (primaryActionText != null && onPrimaryAction != null) {
             Spacer(modifier = Modifier.height(20.dp))
@@ -185,8 +192,8 @@ fun GKFilterChips(options: List<String>, selected: String, onSelect: (String) ->
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(8.dp))
-            .border(0.5.dp, BorderDefault, RoundedCornerShape(8.dp))
-            .background(DarkSurfaceVariant)
+            .border(0.5.dp, LocalGKColors.current.border, RoundedCornerShape(8.dp))
+            .background(LocalGKColors.current.surfaceVariant)
     ) {
         options.forEach { option ->
             val isSelected = option == selected
@@ -194,7 +201,7 @@ fun GKFilterChips(options: List<String>, selected: String, onSelect: (String) ->
                 modifier = Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(if (isSelected) PrimaryCyan else Color.Transparent)
+                    .background(if (isSelected) LocalGKColors.current.primary else Color.Transparent)
                     .clickable { onSelect(option) }
                     .padding(vertical = 8.dp),
                 contentAlignment = Alignment.Center
@@ -202,7 +209,7 @@ fun GKFilterChips(options: List<String>, selected: String, onSelect: (String) ->
                 Text(
                     text = option,
                     style = MaterialTheme.typography.labelMedium,
-                    color = if (isSelected) DarkBg else TextPrimary,
+                    color = if (isSelected) LocalGKColors.current.textOnPrimary else LocalGKColors.current.textPrimary,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 )
             }

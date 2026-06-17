@@ -46,13 +46,13 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
         .filter { it.appName.contains(searchQuery, ignoreCase = true) || it.packageName.contains(searchQuery, ignoreCase = true) }
 
     Column(
-        modifier = Modifier.fillMaxSize().background(DarkBackground)
+        modifier = Modifier.fillMaxSize().background(LocalGKColors.current.background)
     ) {
         // Header Section
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(PrimaryCyan.copy(alpha = 0.06f), DarkBackground)))
+                .background(Brush.verticalGradient(listOf(LocalGKColors.current.primary.copy(alpha = 0.06f), LocalGKColors.current.background)))
                 .padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -61,12 +61,12 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                         .background(Brush.linearGradient(GradientPrimary.map { it.copy(alpha = 0.2f) })),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Shield, null, tint = PrimaryCyan, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Filled.Shield, null, tint = LocalGKColors.current.primary, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("App Firewall", style = MaterialTheme.typography.displaySmall, color = TextPrimary)
-                    Text("$excludedCount apps blocked from internet", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("App Firewall", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
+                    Text("$excludedCount apps blocked from internet", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
                 }
             }
 
@@ -74,7 +74,7 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
 
             // VPN warning banner
             if (!isVpnActive) {
-                Box(Modifier.fillMaxWidth().height(3.dp).background(AccentOrange.copy(alpha = 0.7f)))
+                Box(Modifier.fillMaxWidth().height(3.dp).background(LocalGKColors.current.accentOrange.copy(alpha = 0.7f)))
                 Spacer(Modifier.height(12.dp))
             }
 
@@ -82,21 +82,21 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search installed apps...", color = TextTertiary) },
-                leadingIcon = { Icon(Icons.Filled.Search, null, tint = TextTertiary) },
+                placeholder = { Text("Search installed apps...", color = LocalGKColors.current.textTertiary) },
+                leadingIcon = { Icon(Icons.Filled.Search, "Search", tint = LocalGKColors.current.textTertiary) },
                 trailingIcon = {
                     if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }) {
-                        Icon(Icons.Filled.Clear, null, tint = TextTertiary)
+                        Icon(Icons.Filled.Clear, "Clear search", tint = LocalGKColors.current.textTertiary)
                     }
                 },
                 shape = RoundedCornerShape(14.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PrimaryCyan,
-                    unfocusedBorderColor = GlassBorder,
-                    focusedContainerColor = DarkCard,
-                    unfocusedContainerColor = DarkCard,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
+                    focusedBorderColor = LocalGKColors.current.primary,
+                    unfocusedBorderColor = LocalGKColors.current.border,
+                    focusedContainerColor = LocalGKColors.current.card,
+                    unfocusedContainerColor = LocalGKColors.current.card,
+                    focusedTextColor = LocalGKColors.current.textPrimary,
+                    unfocusedTextColor = LocalGKColors.current.textPrimary
                 ),
                 singleLine = true
             )
@@ -109,17 +109,17 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(12.dp))
-                        .background(AccentOrange.copy(alpha = 0.1f))
+                        .background(LocalGKColors.current.accentOrange.copy(alpha = 0.1f))
                         .padding(16.dp)
                 ) {
                     Row {
-                        Icon(Icons.Filled.WarningAmber, null, tint = AccentOrange, modifier = Modifier.size(24.dp))
+                        Icon(Icons.Filled.WarningAmber, null, tint = LocalGKColors.current.accentOrange, modifier = Modifier.size(24.dp))
                         Spacer(Modifier.width(12.dp))
                         Column {
-                            Text("Global DNS Filter Paused", style = MaterialTheme.typography.titleSmall, color = AccentOrange, fontWeight = FontWeight.Bold)
+                            Text("Global DNS Filter Paused", style = MaterialTheme.typography.titleSmall, color = LocalGKColors.current.accentOrange, fontWeight = FontWeight.Bold)
                             Text(
                                 "Due to Android OS limitations, when the App Firewall is active, all unblocked apps must bypass the VPN entirely to maintain internet speed. The DNS Filter will only resume when all apps are unblocked.",
-                                style = MaterialTheme.typography.bodySmall, color = TextSecondary, modifier = Modifier.padding(top = 4.dp)
+                                style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary, modifier = Modifier.padding(top = 4.dp)
                             )
                         }
                     }
@@ -134,8 +134,8 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                     onClick = { showExcludedOnly = false; showAllowedOnly = false },
                     label = { Text("All (${apps.size})") },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = PrimaryCyan.copy(alpha = 0.15f),
-                        selectedLabelColor = PrimaryCyan
+                        selectedContainerColor = LocalGKColors.current.primary.copy(alpha = 0.15f),
+                        selectedLabelColor = LocalGKColors.current.primary
                     )
                 )
                 FilterChip(
@@ -143,8 +143,8 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                     onClick = { showExcludedOnly = true; showAllowedOnly = false },
                     label = { Text("Blocked ($excludedCount)") },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AccentRed.copy(alpha = 0.15f),
-                        selectedLabelColor = AccentRed
+                        selectedContainerColor = LocalGKColors.current.accentRed.copy(alpha = 0.15f),
+                        selectedLabelColor = LocalGKColors.current.accentRed
                     )
                 )
                 FilterChip(
@@ -152,8 +152,8 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
                     onClick = { showAllowedOnly = true; showExcludedOnly = false },
                     label = { Text("Allowed (${apps.size - excludedCount})") },
                     colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AccentGreen.copy(alpha = 0.15f),
-                        selectedLabelColor = AccentGreen
+                        selectedContainerColor = LocalGKColors.current.accentGreen.copy(alpha = 0.15f),
+                        selectedLabelColor = LocalGKColors.current.accentGreen
                     )
                 )
             }
@@ -162,10 +162,18 @@ fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
         if (isLoading) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = PrimaryCyan, strokeWidth = 2.dp)
+                    CircularProgressIndicator(color = LocalGKColors.current.primary, strokeWidth = 2.dp)
                     Spacer(Modifier.height(12.dp))
-                    Text("Loading installed apps...", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Text("Loading installed apps...", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
+            }
+        } else if (displayed.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                GKEmptyState(
+                    icon = Icons.Filled.SearchOff,
+                    title = "No Apps Found",
+                    subtitle = "Try adjusting your filters or search query."
+                )
             }
         } else {
             LazyColumn(
@@ -203,13 +211,13 @@ fun AppFirewallItem(
     val borderBrush = if (excluded)
         Brush.horizontalGradient(GradientOrange.map { it.copy(alpha = 0.4f) })
     else
-        Brush.horizontalGradient(listOf(GlassBorder, GlassBorder))
+        Brush.horizontalGradient(listOf(LocalGKColors.current.border, LocalGKColors.current.border))
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
             .clickable { isExpanded = !isExpanded }
             .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
@@ -222,28 +230,28 @@ fun AppFirewallItem(
             Box(contentAlignment = Alignment.TopEnd) {
                 Box(
                     modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp))
-                        .background(if (excluded) AccentOrange.copy(alpha = 0.12f) else PrimaryCyan.copy(alpha = 0.08f)),
+                        .background(if (excluded) LocalGKColors.current.accentOrange.copy(alpha = 0.12f) else LocalGKColors.current.primary.copy(alpha = 0.08f)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (appIcon != null) {
                         coil.compose.AsyncImage(model = appIcon, contentDescription = app.appName, modifier = Modifier.size(28.dp))
                     } else {
-                        Icon(Icons.Filled.Apps, null, tint = if (excluded) AccentOrange else PrimaryCyan, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Filled.Apps, null, tint = if (excluded) LocalGKColors.current.accentOrange else LocalGKColors.current.primary, modifier = Modifier.size(22.dp))
                     }
                 }
                 // Risk dot overlay
                 if (app.sensitivePermCount >= 3) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(AccentRed))
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(LocalGKColors.current.accentRed))
                 } else if (app.sensitivePermCount >= 1) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(AccentOrange))
+                    Box(Modifier.size(8.dp).clip(CircleShape).background(LocalGKColors.current.accentOrange))
                 }
             }
 
             Spacer(Modifier.width(12.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(app.appName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = TextPrimary, maxLines = 1)
-                Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = TextTertiary, maxLines = 1)
+                Text(app.appName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = LocalGKColors.current.textPrimary, maxLines = 1)
+                Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textTertiary, maxLines = 1)
             }
 
             // Internet Block toggle
@@ -251,10 +259,10 @@ fun AppFirewallItem(
                 checked = excluded,
                 onCheckedChange = { onToggle(it) },
                 colors = SwitchDefaults.colors(
-                    checkedThumbColor = AccentRed,
-                    checkedTrackColor = AccentRed.copy(alpha = 0.25f),
-                    uncheckedThumbColor = AccentGreen.copy(alpha = 0.8f),
-                    uncheckedTrackColor = AccentGreen.copy(alpha = 0.15f)
+                    checkedThumbColor = LocalGKColors.current.accentRed,
+                    checkedTrackColor = LocalGKColors.current.accentRed.copy(alpha = 0.25f),
+                    uncheckedThumbColor = LocalGKColors.current.accentGreen.copy(alpha = 0.8f),
+                    uncheckedTrackColor = LocalGKColors.current.accentGreen.copy(alpha = 0.15f)
                 )
             )
         }
@@ -271,14 +279,14 @@ fun AppFirewallItem(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Filled.NightlightRound, null,
-                        tint = if (isScreenOffBlocked) AccentOrange else TextTertiary,
+                        tint = if (isScreenOffBlocked) LocalGKColors.current.accentOrange else LocalGKColors.current.textTertiary,
                         modifier = Modifier.size(14.dp)
                     )
                     Spacer(Modifier.width(6.dp))
                     Text(
                         "Block when screen off",
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (isScreenOffBlocked) AccentOrange else TextTertiary
+                        color = if (isScreenOffBlocked) LocalGKColors.current.accentOrange else LocalGKColors.current.textTertiary
                     )
                 }
                 Switch(
@@ -286,10 +294,10 @@ fun AppFirewallItem(
                     onCheckedChange = { onScreenOffToggle(it) },
                     modifier = Modifier.size(width = 40.dp, height = 24.dp),
                     colors = SwitchDefaults.colors(
-                        checkedThumbColor = AccentOrange,
-                        checkedTrackColor = AccentOrange.copy(alpha = 0.25f),
-                        uncheckedThumbColor = TextTertiary,
-                        uncheckedTrackColor = DarkSurface
+                        checkedThumbColor = LocalGKColors.current.accentOrange,
+                        checkedTrackColor = LocalGKColors.current.accentOrange.copy(alpha = 0.25f),
+                        uncheckedThumbColor = LocalGKColors.current.textTertiary,
+                        uncheckedTrackColor = LocalGKColors.current.surface
                     )
                 )
             }
@@ -302,7 +310,7 @@ fun AppFirewallItem(
                     .fillMaxWidth()
                     .padding(top = 12.dp)
             ) {
-                HorizontalDivider(color = BorderDefault, modifier = Modifier.padding(bottom = 8.dp))
+                HorizontalDivider(color = LocalGKColors.current.border, modifier = Modifier.padding(bottom = 8.dp))
                 
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
@@ -312,7 +320,7 @@ fun AppFirewallItem(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Filled.Schedule, null,
-                            tint = if (app.blockScheduleEnabled) PrimaryCyan else TextTertiary,
+                            tint = if (app.blockScheduleEnabled) LocalGKColors.current.primary else LocalGKColors.current.textTertiary,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(Modifier.width(8.dp))
@@ -321,14 +329,14 @@ fun AppFirewallItem(
                                 "Time Schedule",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (app.blockScheduleEnabled) TextPrimary else TextSecondary
+                                color = if (app.blockScheduleEnabled) LocalGKColors.current.textPrimary else LocalGKColors.current.textSecondary
                             )
                             if (app.blockScheduleEnabled) {
                                 val startStr = String.format("%02d:%02d", app.blockStartMinutes / 60, app.blockStartMinutes % 60)
                                 val endStr = String.format("%02d:%02d", app.blockEndMinutes / 60, app.blockEndMinutes % 60)
-                                Text("$startStr - $endStr", style = MaterialTheme.typography.labelSmall, color = PrimaryCyan)
+                                Text("$startStr - $endStr", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.primary)
                             } else {
-                                Text("Not scheduled", style = MaterialTheme.typography.labelSmall, color = TextTertiary)
+                                Text("Not scheduled", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
                             }
                         }
                     }
@@ -338,10 +346,10 @@ fun AppFirewallItem(
                         onCheckedChange = { onScheduleUpdate(it, app.blockStartMinutes, app.blockEndMinutes) },
                         modifier = Modifier.size(width = 40.dp, height = 24.dp),
                         colors = SwitchDefaults.colors(
-                            checkedThumbColor = PrimaryCyan,
-                            checkedTrackColor = PrimaryCyan.copy(alpha = 0.25f),
-                            uncheckedThumbColor = TextTertiary,
-                            uncheckedTrackColor = DarkSurface
+                            checkedThumbColor = LocalGKColors.current.primary,
+                            checkedTrackColor = LocalGKColors.current.primary.copy(alpha = 0.25f),
+                            uncheckedThumbColor = LocalGKColors.current.textTertiary,
+                            uncheckedTrackColor = LocalGKColors.current.surface
                         )
                     )
                 }
@@ -356,8 +364,8 @@ fun AppFirewallItem(
                     ) {
                         OutlinedButton(
                             onClick = { showStartTimePicker = true },
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderDefault),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                            border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.border),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalGKColors.current.textPrimary)
                         ) {
                             val startStr = String.format("%02d:%02d", app.blockStartMinutes / 60, app.blockStartMinutes % 60)
                             Text("Start: $startStr", style = MaterialTheme.typography.bodySmall)
@@ -365,8 +373,8 @@ fun AppFirewallItem(
 
                         OutlinedButton(
                             onClick = { showEndTimePicker = true },
-                            border = androidx.compose.foundation.BorderStroke(1.dp, BorderDefault),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                            border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.border),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalGKColors.current.textPrimary)
                         ) {
                             val endStr = String.format("%02d:%02d", app.blockEndMinutes / 60, app.blockEndMinutes % 60)
                             Text("End: $endStr", style = MaterialTheme.typography.bodySmall)
@@ -418,27 +426,27 @@ fun TimePickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = DarkSurfaceVariant,
-        title = { Text("Select Time", color = TextPrimary) },
+        containerColor = LocalGKColors.current.surfaceVariant,
+        title = { Text("Select Time", color = LocalGKColors.current.textPrimary) },
         text = {
             TimePicker(state = state, colors = TimePickerDefaults.colors(
-                clockDialColor = DarkBackground,
-                selectorColor = PrimaryCyan,
-                containerColor = DarkCard,
-                timeSelectorSelectedContainerColor = PrimaryCyan.copy(alpha = 0.2f),
-                timeSelectorUnselectedContainerColor = DarkCard,
-                timeSelectorSelectedContentColor = PrimaryCyan,
-                timeSelectorUnselectedContentColor = TextPrimary
+                clockDialColor = LocalGKColors.current.background,
+                selectorColor = LocalGKColors.current.primary,
+                containerColor = LocalGKColors.current.card,
+                timeSelectorSelectedContainerColor = LocalGKColors.current.primary.copy(alpha = 0.2f),
+                timeSelectorUnselectedContainerColor = LocalGKColors.current.card,
+                timeSelectorSelectedContentColor = LocalGKColors.current.primary,
+                timeSelectorUnselectedContentColor = LocalGKColors.current.textPrimary
             ))
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(state.hour, state.minute) }) {
-                Text("OK", color = PrimaryCyan, fontWeight = FontWeight.Bold)
+                Text("OK", color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextSecondary)
+                Text("Cancel", color = LocalGKColors.current.textSecondary)
             }
         }
     )

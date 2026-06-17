@@ -52,32 +52,32 @@ fun PermissionAuditorScreen(
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("App Permissions", "Hardware Access")
 
-    Column(modifier = Modifier.fillMaxSize().background(DarkBackground)) {
+    Column(modifier = Modifier.fillMaxSize().background(LocalGKColors.current.background)) {
         // Header
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(AccentYellow.copy(alpha = 0.08f), DarkBackground)))
+                .background(Brush.verticalGradient(listOf(LocalGKColors.current.accentYellow.copy(alpha = 0.08f), LocalGKColors.current.background)))
                 .padding(horizontal = 20.dp, vertical = 20.dp)
         ) {
             if (navController != null) {
                 IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.ArrowBack, "Back", tint = TextSecondary, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Filled.ArrowBack, "Back", tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(20.dp))
                 }
                 Spacer(Modifier.height(4.dp))
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                        .background(Brush.linearGradient(listOf(AccentYellow, AccentOrange).map { it.copy(alpha = 0.2f) })),
+                        .background(Brush.linearGradient(listOf(LocalGKColors.current.accentYellow, LocalGKColors.current.accentOrange).map { it.copy(alpha = 0.2f) })),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.VerifiedUser, null, tint = AccentYellow, modifier = Modifier.size(22.dp))
+                    Icon(Icons.Filled.VerifiedUser, null, tint = LocalGKColors.current.accentYellow, modifier = Modifier.size(22.dp))
                 }
                 Spacer(Modifier.width(12.dp))
                 Column {
-                    Text("Privacy Guard", style = MaterialTheme.typography.displaySmall, color = TextPrimary)
-                    Text("Permissions & Hardware Access Control", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("Device Audit", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
+                    Text("Hardware Access & Permissions", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
                 }
             }
         }
@@ -85,15 +85,15 @@ fun PermissionAuditorScreen(
         // Tab Row
         TabRow(
             selectedTabIndex = selectedTab,
-            containerColor = DarkSurface,
-            contentColor = PrimaryCyan,
+            containerColor = LocalGKColors.current.surface,
+            contentColor = LocalGKColors.current.primary,
             indicator = { tabPositions ->
                 if (selectedTab < tabPositions.size) {
                     Box(
                         modifier = Modifier
                             .tabIndicatorOffset(tabPositions[selectedTab])
                             .height(2.dp)
-                            .background(PrimaryCyan)
+                            .background(LocalGKColors.current.primary)
                     )
                 }
             }
@@ -105,7 +105,7 @@ fun PermissionAuditorScreen(
                     text = {
                         Text(
                             title,
-                            color = if (selectedTab == index) PrimaryCyan else TextSecondary,
+                            color = if (selectedTab == index) LocalGKColors.current.primary else LocalGKColors.current.textSecondary,
                             style = MaterialTheme.typography.bodyMedium,
                             fontWeight = if (selectedTab == index) FontWeight.SemiBold else FontWeight.Normal
                         )
@@ -116,7 +116,11 @@ fun PermissionAuditorScreen(
 
         when (selectedTab) {
             0 -> AppPermissionsTab(results, isScanning, scannedCount, totalCount) { viewModel.scanPermissions() }
-            1 -> HardwareAccessTab(sensorLogs)
+            1 -> HardwareAccessTab(
+                sensorLogs = sensorLogs,
+                hasUsageStats = viewModel.hasUsageStatsPermission(),
+                onRefresh = { viewModel.refreshSensorData() }
+            )
         }
     }
 }
@@ -145,22 +149,22 @@ fun AppPermissionsTab(
                     .fillMaxWidth()
                     .padding(16.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(DarkSurfaceVariant)
+                    .background(LocalGKColors.current.surfaceVariant)
                     .padding(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = PrimaryCyan)
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = LocalGKColors.current.primary)
                 Spacer(Modifier.width(16.dp))
-                Text("Auditing apps… ($scannedCount / $totalCount)", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text("Auditing apps… ($scannedCount / $totalCount)", color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
             }
         }
 
         if (results.isEmpty() && !isScanning) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(Icons.Filled.SecurityUpdateWarning, null, tint = TextTertiary, modifier = Modifier.size(52.dp))
+                    Icon(Icons.Filled.SecurityUpdateWarning, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(52.dp))
                     Spacer(Modifier.height(12.dp))
-                    Text("Run an audit to find risky apps", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+                    Text("Run an audit to find risky apps", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
             }
         } else {
@@ -170,7 +174,7 @@ fun AppPermissionsTab(
             ) {
                 if (results.isNotEmpty()) {
                     item {
-                        Text("🔴 Red = real-time surveillance risk  ·  ⬜ Gray = data access risk", style = MaterialTheme.typography.labelSmall, color = TextTertiary, modifier = Modifier.padding(bottom = 8.dp))
+                        Text("🔴 Red = real-time surveillance risk  ·  ⬜ Gray = data access risk", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary, modifier = Modifier.padding(bottom = 8.dp))
                     }
                 }
 
@@ -201,8 +205,8 @@ fun AppPermissionsTab(
                             modifier = Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Show ${low.size} low-risk apps", style = MaterialTheme.typography.bodyMedium, color = TextTertiary, modifier = Modifier.weight(1f))
-                            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = TextTertiary)
+                            Text("Show ${low.size} low-risk apps", style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textTertiary, modifier = Modifier.weight(1f))
+                            Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore, null, tint = LocalGKColors.current.textTertiary)
                         }
                         if (expanded) {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -215,7 +219,7 @@ fun AppPermissionsTab(
                 if (results.isNotEmpty() && critical.isEmpty() && high.isEmpty() && medium.isEmpty()) {
                     item {
                         Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-                            Text("No risky apps found. Looking good!", color = AccentGreen, fontWeight = FontWeight.Bold)
+                            Text("No risky apps found. Looking good!", color = LocalGKColors.current.accentGreen, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -235,17 +239,21 @@ data class HardwareSensor(
     val permission: String  // Android permission name for settings deeplink
 )
 
-private val HARDWARE_SENSORS = listOf(
-    HardwareSensor("Camera", "Take photos and record video", Icons.Filled.PhotoCamera, AccentRed, "android.permission.CAMERA"),
-    HardwareSensor("Microphone", "Record audio and voice", Icons.Filled.Mic, AccentOrange, "android.permission.RECORD_AUDIO"),
-    HardwareSensor("Location", "Track precise GPS position", Icons.Filled.LocationOn, AccentYellow, "android.permission.ACCESS_FINE_LOCATION"),
-    HardwareSensor("Contacts", "Read and write contacts", Icons.Filled.Contacts, PrimaryCyan, "android.permission.READ_CONTACTS"),
+@Composable
+private fun getHardwareSensors() = listOf(
+    HardwareSensor("Camera", "Take photos and record video", Icons.Filled.PhotoCamera, LocalGKColors.current.accentRed, "android.permission.CAMERA"),
+    HardwareSensor("Microphone", "Record audio and voice", Icons.Filled.Mic, LocalGKColors.current.accentOrange, "android.permission.RECORD_AUDIO"),
+    HardwareSensor("Location", "Track precise GPS position", Icons.Filled.LocationOn, LocalGKColors.current.accentYellow, "android.permission.ACCESS_FINE_LOCATION"),
+    HardwareSensor("Contacts", "Read and write contacts", Icons.Filled.Contacts, LocalGKColors.current.primary, "android.permission.READ_CONTACTS"),
     HardwareSensor("Storage", "Read and write files", Icons.Filled.Folder, Color(0xFF7C83FD), "android.permission.READ_EXTERNAL_STORAGE")
 )
 
 @Composable
-fun HardwareAccessTab(sensorLogs: List<SensorLog>) {
+fun HardwareAccessTab(sensorLogs: List<SensorLog>, hasUsageStats: Boolean = false, onRefresh: () -> Unit = {}) {
     val context = LocalContext.current
+    val hardwareSensorsList = getHardwareSensors()
+    // Track real-time permission state so the banner updates without restart
+    var usageGranted by remember { mutableStateOf(hasUsageStats) }
 
     // Group logs by sensor type for analytics
     val logsByType = sensorLogs.groupBy { it.sensorType }
@@ -257,41 +265,113 @@ fun HardwareAccessTab(sensorLogs: List<SensorLog>) {
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // Refresh row
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onRefresh) {
+                    Icon(Icons.Filled.Refresh, null, modifier = Modifier.size(16.dp), tint = LocalGKColors.current.primary)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Refresh Access History", style = MaterialTheme.typography.labelMedium, color = LocalGKColors.current.primary)
+                }
+            }
+        }
+
         // Quick info banner
         item {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(PrimaryCyan.copy(alpha = 0.08f))
+                    .background(LocalGKColors.current.primary.copy(alpha = 0.08f))
                     .padding(12.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Info, null, tint = PrimaryCyan, modifier = Modifier.size(16.dp))
+                    Icon(Icons.Filled.Info, null, tint = LocalGKColors.current.primary, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(8.dp))
                     Text(
-                        "Tap any sensor to view apps. The Block / Unblock buttons open Android's permission settings to revoke or grant access.",
+                        "Tap any sensor to view apps. Block/Unblock buttons open Android permission settings.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.SecurityUpdateWarning, null, tint = AccentYellow, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        "To monitor OTHER apps' hardware usage, you must grant ADB permission:\nadb shell pm grant com.gatekeeper.mobile android.permission.WATCH_APPOPS",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = AccentYellow
+                        color = LocalGKColors.current.textSecondary
                     )
                 }
             }
         }
 
+        // ── Usage Access CTA card ─────────────────────────────────────────────────────────────
+        item {
+            val cardBg = if (usageGranted)
+                LocalGKColors.current.accentGreen.copy(alpha = 0.10f)
+            else
+                LocalGKColors.current.accentOrange.copy(alpha = 0.10f)
+            val cardBorder = if (usageGranted)
+                LocalGKColors.current.accentGreen.copy(alpha = 0.30f)
+            else
+                LocalGKColors.current.accentOrange.copy(alpha = 0.30f)
+            val cardIcon = if (usageGranted) Icons.Filled.CheckCircle else Icons.Filled.Sensors
+            val cardTint = if (usageGranted) LocalGKColors.current.accentGreen else LocalGKColors.current.accentOrange
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(cardBg)
+                    .border(1.dp, cardBorder, RoundedCornerShape(14.dp))
+                    .then(
+                        if (!usageGranted)
+                            Modifier.clickable {
+                                try {
+                                    context.startActivity(
+                                        android.content.Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                                    )
+                                } catch (e: Exception) {
+                                    context.startActivity(android.content.Intent(android.provider.Settings.ACTION_SETTINGS))
+                                }
+                            }
+                        else Modifier
+                    )
+                    .padding(14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp))
+                        .background(cardTint.copy(alpha = 0.15f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(cardIcon, null, tint = cardTint, modifier = Modifier.size(22.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        if (usageGranted) "Real-Time Data Active ✓" else "Enable Real Sensor Data",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = cardTint
+                    )
+                    Text(
+                        if (usageGranted)
+                            "Usage Access granted — showing real app activity timestamps from the last 24 hours."
+                        else
+                            "Tap to open Settings → Usage Access → GateKeeper → Enable. Shows exactly when each app used Camera/Mic/Location today.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = LocalGKColors.current.textSecondary
+                    )
+                }
+                if (!usageGranted) {
+                    Spacer(Modifier.width(8.dp))
+                    Icon(Icons.Filled.OpenInNew, null, tint = cardTint, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+
+
         // Privacy Dashboard Donut Chart
         item {
             Spacer(Modifier.height(16.dp))
-            Text("Privacy Dashboard", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+            Text("Privacy Dashboard", style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(8.dp))
             PrivacyDashboardChart(sensorLogs)
             Spacer(Modifier.height(8.dp))
@@ -300,7 +380,7 @@ fun HardwareAccessTab(sensorLogs: List<SensorLog>) {
         // Global System Blocks
         item {
             Spacer(Modifier.height(8.dp))
-            Text("Global System Blocks", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+            Text("Global System Blocks", style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(4.dp))
             
             // Camera/Mic system toggles (Android 12+) or Privacy Dashboard
@@ -308,7 +388,7 @@ fun HardwareAccessTab(sensorLogs: List<SensorLog>) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
-                    .background(DarkCard)
+                    .background(LocalGKColors.current.card)
                     .clickable { 
                         try {
                             context.startActivity(Intent(Settings.ACTION_PRIVACY_SETTINGS))
@@ -321,27 +401,27 @@ fun HardwareAccessTab(sensorLogs: List<SensorLog>) {
             ) {
                 Box(
                     modifier = Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
-                        .background(AccentRed.copy(alpha = 0.15f)),
+                        .background(LocalGKColors.current.accentRed.copy(alpha = 0.15f)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Block, null, tint = AccentRed, modifier = Modifier.size(24.dp))
+                    Icon(Icons.Filled.Block, null, tint = LocalGKColors.current.accentRed, modifier = Modifier.size(24.dp))
                 }
                 Spacer(Modifier.width(14.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("System-Wide Sensor Block", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                    Text("Open Android's global privacy controls to cut off Camera & Mic access for ALL apps instantly.", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("System-Wide Sensor Block", style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.SemiBold)
+                    Text("Open Android's global privacy controls to cut off Camera & Mic access for ALL apps instantly.", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
                 }
-                Icon(Icons.Filled.OpenInNew, null, tint = PrimaryCyan, modifier = Modifier.size(20.dp))
+                Icon(Icons.Filled.OpenInNew, null, tint = LocalGKColors.current.primary, modifier = Modifier.size(20.dp))
             }
         }
         
         item {
             Spacer(Modifier.height(16.dp))
-            Text("App-Specific Access", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+            Text("App-Specific Access", style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
         }
 
         // Hardware sensor cards with access log
-        items(HARDWARE_SENSORS) { sensor ->
+        items(hardwareSensorsList) { sensor ->
             HardwareSensorCard(sensor = sensor, logs = logsByType[sensor.name.uppercase()] ?: emptyList())
         }
 
@@ -349,7 +429,7 @@ fun HardwareAccessTab(sensorLogs: List<SensorLog>) {
         if (sensorLogs.isNotEmpty()) {
             item {
                 Spacer(Modifier.height(8.dp))
-                Text("Recent Access Timeline (24h)", style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text("Recent Access Timeline (24h)", style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(4.dp))
             }
 
@@ -377,8 +457,8 @@ fun HardwareSensorCard(sensor: HardwareSensor, logs: List<SensorLog>) {
     val recentCount = logs.filter { System.currentTimeMillis() - it.startedAt < 24 * 60 * 60 * 1000 }.size
 
     val riskColor = when {
-        backgroundAccesses.isNotEmpty() -> AccentRed
-        recentCount > 5 -> AccentOrange
+        backgroundAccesses.isNotEmpty() -> LocalGKColors.current.accentRed
+        recentCount > 5 -> LocalGKColors.current.accentOrange
         else -> sensor.accentColor
     }
 
@@ -386,7 +466,7 @@ fun HardwareSensorCard(sensor: HardwareSensor, logs: List<SensorLog>) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
     ) {
         // Sensor header row
         Row(
@@ -407,8 +487,8 @@ fun HardwareSensorCard(sensor: HardwareSensor, logs: List<SensorLog>) {
             Spacer(Modifier.width(14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                Text(sensor.name, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text(sensor.description, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Text(sensor.name, style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.SemiBold)
+                Text(sensor.description, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
             }
 
             // Stats badges
@@ -423,15 +503,15 @@ fun HardwareSensorCard(sensor: HardwareSensor, logs: List<SensorLog>) {
                     }
                     if (backgroundAccesses.isNotEmpty()) {
                         Spacer(Modifier.height(2.dp))
-                        Text("⚠️ BG access", style = MaterialTheme.typography.labelSmall, color = AccentRed)
+                        Text("⚠️ BG access", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.accentRed)
                     }
                 } else {
-                    Text("No access today", style = MaterialTheme.typography.bodySmall, color = AccentGreen)
+                    Text("No access today", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.accentGreen)
                 }
                 Spacer(Modifier.height(2.dp))
                 Icon(
                     if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    null, tint = TextTertiary, modifier = Modifier.size(18.dp)
+                    null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(18.dp)
                 )
             }
         }
@@ -442,13 +522,13 @@ fun HardwareSensorCard(sensor: HardwareSensor, logs: List<SensorLog>) {
             enter = expandVertically(animationSpec = tween(200)) + fadeIn()
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp)) {
-                HorizontalDivider(color = GlassBorder)
+                HorizontalDivider(color = LocalGKColors.current.border)
                 Spacer(Modifier.height(12.dp))
 
                 if (appAccesses.isEmpty()) {
-                    Text("No apps accessed ${sensor.name} recently.", style = MaterialTheme.typography.bodySmall, color = TextTertiary)
+                    Text("No apps accessed ${sensor.name} recently.", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textTertiary)
                 } else {
-                    Text("Apps that accessed ${sensor.name}:", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+                    Text("Apps that accessed ${sensor.name}:", style = MaterialTheme.typography.labelMedium, color = LocalGKColors.current.textSecondary)
                     Spacer(Modifier.height(8.dp))
 
                     appAccesses.forEach { (pkg, pkgLogs) ->
@@ -463,7 +543,7 @@ fun HardwareSensorCard(sensor: HardwareSensor, logs: List<SensorLog>) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(DarkSurface)
+                                .background(LocalGKColors.current.surface)
                                 .padding(10.dp)
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -473,15 +553,15 @@ fun HardwareSensorCard(sensor: HardwareSensor, logs: List<SensorLog>) {
                                 if (appIcon != null) {
                                     coil.compose.AsyncImage(model = appIcon, contentDescription = appName, modifier = Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)))
                                 } else {
-                                    Icon(Icons.Filled.Android, null, tint = TextTertiary, modifier = Modifier.size(24.dp))
+                                    Icon(Icons.Filled.Android, null, tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(24.dp))
                                 }
                                 Spacer(Modifier.width(10.dp))
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(appName, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                                    Text(appName, style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Medium)
                                     Text(
                                         "${pkgLogs.size} access${if (pkgLogs.size > 1) "es" else ""}${if (bgCount > 0) " • $bgCount background ⚠️" else ""}",
                                         style = MaterialTheme.typography.bodySmall,
-                                        color = if (bgCount > 0) AccentRed else TextSecondary
+                                        color = if (bgCount > 0) LocalGKColors.current.accentRed else LocalGKColors.current.textSecondary
                                     )
                                 }
                                 // *** KEY FEATURE: Open EXACT permission page for THIS sensor ***
@@ -535,7 +615,7 @@ fun HardwareSensorCard(sensor: HardwareSensor, logs: List<SensorLog>) {
                         "GateKeeper monitors when apps access ${sensor.name}. Background access triggers a security alert. " +
                         "Use 'Revoke ${sensor.name}' to open the exact permission page for each app.",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextSecondary
+                        color = LocalGKColors.current.textSecondary
                     )
                 }
                 Spacer(Modifier.height(8.dp))
@@ -582,17 +662,17 @@ fun SensorLogItem(log: SensorLog) {
     val formatter = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
     val (icon, color) = when (log.sensorType) {
-        "CAMERA" -> Icons.Filled.PhotoCamera to AccentRed
-        "MICROPHONE" -> Icons.Filled.Mic to AccentOrange
-        "LOCATION" -> Icons.Filled.LocationOn to AccentYellow
-        else -> Icons.Filled.Sensors to PrimaryCyan
+        "CAMERA" -> Icons.Filled.PhotoCamera to LocalGKColors.current.accentRed
+        "MICROPHONE" -> Icons.Filled.Mic to LocalGKColors.current.accentOrange
+        "LOCATION" -> Icons.Filled.LocationOn to LocalGKColors.current.accentYellow
+        else -> Icons.Filled.Sensors to LocalGKColors.current.primary
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -605,20 +685,20 @@ fun SensorLogItem(log: SensorLog) {
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(appName, style = MaterialTheme.typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(appName, style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Medium)
                 if (log.isBackground) {
                     Spacer(Modifier.width(6.dp))
                     Box(
-                        modifier = Modifier.clip(RoundedCornerShape(3.dp)).background(AccentRed.copy(alpha = 0.15f)).padding(horizontal = 4.dp, vertical = 1.dp)
+                        modifier = Modifier.clip(RoundedCornerShape(3.dp)).background(LocalGKColors.current.accentRed.copy(alpha = 0.15f)).padding(horizontal = 4.dp, vertical = 1.dp)
                     ) {
-                        Text("BG", style = MaterialTheme.typography.labelSmall, color = AccentRed, fontWeight = FontWeight.Bold)
+                        Text("BG", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.accentRed, fontWeight = FontWeight.Bold)
                     }
                 }
             }
             Text(
                 "${log.sensorType} • ${formatter.format(Date(log.startedAt))}${if (log.durationMs > 0) " (${log.durationMs / 1000}s)" else ""}",
                 style = MaterialTheme.typography.bodySmall,
-                color = TextSecondary
+                color = LocalGKColors.current.textSecondary
             )
         }
         // Quick revoke for logged apps
@@ -631,7 +711,7 @@ fun SensorLogItem(log: SensorLog) {
             },
             modifier = Modifier.size(32.dp)
         ) {
-            Icon(Icons.Filled.Settings, "Manage", tint = TextTertiary, modifier = Modifier.size(16.dp))
+            Icon(Icons.Filled.Settings, "Manage", tint = LocalGKColors.current.textTertiary, modifier = Modifier.size(16.dp))
         }
     }
 }
@@ -642,10 +722,10 @@ fun SensorLogItem(log: SensorLog) {
 @Composable
 fun AuditorAppItem(appInfo: AppPermissionInfo) {
     val accentColor = when (appInfo.riskTier) {
-        "CRITICAL" -> AccentRed
-        "HIGH" -> AccentOrange
-        "MEDIUM" -> AccentYellow
-        else -> TextTertiary
+        "CRITICAL" -> LocalGKColors.current.accentRed
+        "HIGH" -> LocalGKColors.current.accentOrange
+        "MEDIUM" -> LocalGKColors.current.accentYellow
+        else -> LocalGKColors.current.textTertiary
     }
 
     val context = LocalContext.current
@@ -657,7 +737,7 @@ fun AuditorAppItem(appInfo: AppPermissionInfo) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(DarkCard)
+            .background(LocalGKColors.current.card)
             .padding(16.dp)
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -673,8 +753,8 @@ fun AuditorAppItem(appInfo: AppPermissionInfo) {
             }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(appInfo.appName, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.SemiBold)
-                Text(appInfo.packageName, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                Text(appInfo.appName, style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.SemiBold)
+                Text(appInfo.packageName, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
             }
 
             Box(
@@ -688,10 +768,10 @@ fun AuditorAppItem(appInfo: AppPermissionInfo) {
         }
 
         Spacer(Modifier.height(12.dp))
-        HorizontalDivider(color = GlassBorder)
+        HorizontalDivider(color = LocalGKColors.current.border)
         Spacer(Modifier.height(12.dp))
 
-        Text("Sensitive Permissions:", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+        Text("Sensitive Permissions:", style = MaterialTheme.typography.labelMedium, color = LocalGKColors.current.textSecondary)
         Spacer(Modifier.height(6.dp))
 
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -703,7 +783,7 @@ fun AuditorAppItem(appInfo: AppPermissionInfo) {
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(6.dp))
-                            .background(AccentRed)
+                            .background(LocalGKColors.current.accentRed)
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
@@ -716,13 +796,13 @@ fun AuditorAppItem(appInfo: AppPermissionInfo) {
                 } else {
                     Box(
                         modifier = Modifier
-                            .border(1.dp, TextTertiary, RoundedCornerShape(6.dp))
+                            .border(1.dp, LocalGKColors.current.textTertiary, RoundedCornerShape(6.dp))
                             .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
                             permName,
                             style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
+                            color = LocalGKColors.current.textSecondary,
                             fontWeight = FontWeight.Medium
                         )
                     }
