@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.gatekeeper.mobile.ui.theme.LocalGKColors
+import com.gatekeeper.mobile.ui.theme.glassAmbientBackground
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,6 +54,7 @@ fun LimitationsScreen(navController: NavController) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .glassAmbientBackground()
                 .verticalScroll(rememberScrollState())
         ) {
             Box(
@@ -68,6 +70,8 @@ fun LimitationsScreen(navController: NavController) {
                         color = LocalGKColors.current.textPrimary,
                         fontWeight = FontWeight.Bold
                     )
+                    Spacer(Modifier.height(8.dp))
+                    com.gatekeeper.mobile.ui.components.GKBadge("TECHNICAL TRANSPARENCY", com.gatekeeper.mobile.ui.components.BadgeStyle.MEDIUM)
                     Spacer(Modifier.height(8.dp))
                     Text(
                         "GateKeeper pushes the boundaries of Android security. However, due to Android's sandboxing and OS-level restrictions, certain features use simulated data for demonstration purposes or employ alternative architectural approaches. These are documented platform limitations, not implementation gaps.",
@@ -138,10 +142,7 @@ fun AccordionItem(title: String, icon: ImageVector, badge: String, content: Stri
         label = "rotation"
     )
 
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = LocalGKColors.current.card),
-        border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.border),
+    com.gatekeeper.mobile.ui.components.GlassCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { expanded = !expanded }

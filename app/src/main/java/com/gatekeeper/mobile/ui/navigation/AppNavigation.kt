@@ -17,7 +17,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.gatekeeper.mobile.ui.screens.aichat.AiChatScreen
+import com.gatekeeper.mobile.ui.screens.protecthub.ProtectHubScreen
 import com.gatekeeper.mobile.ui.screens.dashboard.DashboardScreen
 import com.gatekeeper.mobile.ui.screens.dns.DnsFilterScreen
 import com.gatekeeper.mobile.ui.screens.firewall.FirewallScreen
@@ -180,11 +180,12 @@ fun AppNavigation(
             }
         ) {
             composable(Screen.Dashboard.route) { DashboardScreen(navController) }
-            composable(Screen.Firewall.route) { FirewallScreen() }
-            composable(Screen.DnsFilter.route) { DnsFilterScreen() }
-            composable(Screen.Traffic.route) { TrafficScreen() }
-            composable(Screen.AiChat.route) { AiChatScreen() }
-            composable(Screen.Settings.route) { SettingsLandingScreen(navController = navController) }
+            composable(Screen.ProtectHub.route) { ProtectHubScreen(navController = navController) }
+            composable(Screen.Firewall.route) { FirewallScreen(navController = navController) }
+            composable(Screen.DnsFilter.route) { DnsFilterScreen(navController = navController) }
+            composable(Screen.Traffic.route) { TrafficScreen(navController = navController) }
+            composable(Screen.Alerts.route) { com.gatekeeper.mobile.ui.screens.alerts.AlertsScreen(navController = navController) }
+            composable(Screen.Settings.route) { SettingsScreen(navController = navController) }
             composable("settings/protection") { SettingsProtectionScreen(navController = navController) }
             composable("settings/privacy") { SettingsPrivacyScreen(navController = navController) }
             composable("settings/advanced") { SettingsAdvancedScreen(navController = navController) }

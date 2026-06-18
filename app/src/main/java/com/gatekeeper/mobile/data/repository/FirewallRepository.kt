@@ -18,14 +18,19 @@ class FirewallRepository @Inject constructor(
     suspend fun getAllRules(): List<FirewallRule> = dao.getAllRules()
 
     suspend fun toggleBlock(packageName: String, appName: String, blocked: Boolean) {
-        dao.upsert(
-            FirewallRule(
-                packageName = packageName,
-                appName = appName,
-                isBlocked = blocked,
-                updatedAt = System.currentTimeMillis()
+        val existing = dao.getByPackage(packageName)
+        if (existing != null) {
+            dao.upsert(existing.copy(isBlocked = blocked, updatedAt = System.currentTimeMillis()))
+        } else {
+            dao.upsert(
+                FirewallRule(
+                    packageName = packageName,
+                    appName = appName,
+                    isBlocked = blocked,
+                    updatedAt = System.currentTimeMillis()
+                )
             )
-        )
+        }
     }
 
     suspend fun deleteAll() = dao.deleteAll()

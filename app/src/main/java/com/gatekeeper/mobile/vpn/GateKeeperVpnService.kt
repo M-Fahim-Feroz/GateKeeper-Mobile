@@ -156,11 +156,7 @@ class GateKeeperVpnService : VpnService() {
         udpRelayHandler = com.gatekeeper.mobile.vpn.relay.UdpRelayHandler(this, connectionTracker)
         tcpRelayHandler = com.gatekeeper.mobile.vpn.relay.TcpRelayHandler(this, dnsBlocklistManager, connectionTracker)
 
-        // Start Sensor Logging
-        privacyAccessLogger.start()
 
-        // Start Cellular Monitor (IMSI catcher detection)
-        cellularMonitor.start()
 
         // Start foreground notification
         startForeground(NOTIFICATION_ID, createNotification())
@@ -302,6 +298,32 @@ class GateKeeperVpnService : VpnService() {
             }
         }
         
+        // Observe IMSI Detection state
+        serviceScope.launch {
+            settingsRepository.imsiDetectionFlow.collect { enabled ->
+                if (enabled) {
+                    cellularMonitor.start()
+                    Log.i(TAG, "IMSI detection started")
+                } else {
+                    cellularMonitor.stop()
+                    Log.i(TAG, "IMSI detection stopped")
+                }
+            }
+        }
+
+        // Observe Background Sensor Alerts state
+        serviceScope.launch {
+            settingsRepository.backgroundSensorAlertsFlow.collect { enabled ->
+                if (enabled) {
+                    privacyAccessLogger.start()
+                    Log.i(TAG, "Background sensor alerts started")
+                } else {
+                    privacyAccessLogger.stop()
+                    Log.i(TAG, "Background sensor alerts stopped")
+                }
+            }
+        }
+        
         // Start periodic traffic reporting
         startReportingLoop()
     }
@@ -325,15 +347,16 @@ class GateKeeperVpnService : VpnService() {
                         bandwidthMonitor.addTraffic(conn.packageName, conn.bytesIn, conn.bytesOut)
 
                         trafficLogger.log(
+                            uid = conn.uid,
                             packageName = conn.packageName,
                             appName = conn.appName,
                             protocol = conn.protocol,
-                            localIp = conn.localIp,
-                            localPort = conn.localPort,
-                            remoteIp = conn.remoteIp,
-                            remotePort = conn.remotePort,
-                            bytesIn = conn.bytesIn,
-                            bytesOut = conn.bytesOut,
+                            sourceIp = conn.localIp,
+                            sourcePort = conn.localPort,
+                            destinationIp = conn.remoteIp,
+                            destinationPort = conn.remotePort,
+                            bytesSent = conn.bytesOut,
+                            bytesReceived = conn.bytesIn,
                             wasBlocked = false
                         )
                         
@@ -515,13 +538,14 @@ class GateKeeperVpnService : VpnService() {
                                 val conn = connectionTracker.getConnectionByBuffer(packetCopy)
                                 if (conn != null) {
                                     trafficLogger.log(
-                                        packageName = conn.packageName ?: "unknown",
+                                        uid = conn.uid,
+                                        packageName = conn.packageName,
                                         appName = conn.appName ?: "Unknown App",
                                         protocol = conn.protocol,
-                                        localIp = conn.localIp,
-                                        localPort = conn.localPort,
-                                        remoteIp = conn.remoteIp,
-                                        remotePort = conn.remotePort,
+                                        sourceIp = conn.localIp,
+                                        sourcePort = conn.localPort,
+                                        destinationIp = conn.remoteIp,
+                                        destinationPort = conn.remotePort,
                                         wasBlocked = true
                                     )
                                 }
@@ -536,14 +560,15 @@ class GateKeeperVpnService : VpnService() {
                                 if (domain != null) postBlockNotification(appName, "Firewall", "DNS")
                                 if (conn != null) {
                                     trafficLogger.log(
-                                        packageName = conn.packageName ?: "unknown",
+                                        uid = conn.uid,
+                                        packageName = conn.packageName,
                                         appName = appName,
                                         protocol = "DNS",
-                                        localIp = conn.localIp,
-                                        localPort = conn.localPort,
-                                        remoteIp = conn.remoteIp,
-                                        remotePort = 53,
-                                        remoteHostname = domain,
+                                        sourceIp = conn.localIp,
+                                        sourcePort = conn.localPort,
+                                        destinationIp = conn.remoteIp,
+                                        destinationPort = 53,
+                                        hostname = domain,
                                         wasBlocked = true
                                     )
                                 }
@@ -561,14 +586,15 @@ class GateKeeperVpnService : VpnService() {
                                         appName = conn.appName ?: "Unknown"
                                     )
                                     trafficLogger.log(
+                                        uid = conn.uid,
                                         packageName = packageName,
                                         appName = conn.appName ?: "Unknown",
                                         protocol = "DNS",
-                                        localIp = conn.localIp,
-                                        localPort = conn.localPort,
-                                        remoteIp = conn.remoteIp,
-                                        remotePort = 53,
-                                        remoteHostname = domain,
+                                        sourceIp = conn.localIp,
+                                        sourcePort = conn.localPort,
+                                        destinationIp = conn.remoteIp,
+                                        destinationPort = 53,
+                                        hostname = domain,
                                         wasBlocked = false
                                     )
                                 }

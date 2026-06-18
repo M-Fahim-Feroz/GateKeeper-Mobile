@@ -1,9 +1,14 @@
 package com.gatekeeper.mobile.ui.screens.threats
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -13,15 +18,20 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.gatekeeper.mobile.ui.components.*
 import androidx.navigation.NavController
-import com.gatekeeper.mobile.ui.theme.*
+import com.gatekeeper.mobile.ui.theme.LocalGKColors
+import com.gatekeeper.mobile.ui.components.GKInfoButton
+import com.gatekeeper.mobile.ui.components.GKInfoDialog
+import kotlinx.coroutines.launch
 
 @Composable
 fun ThreatFeedScreen(
@@ -29,375 +39,341 @@ fun ThreatFeedScreen(
     viewModel: ThreatFeedViewModel = hiltViewModel()
 ) {
     val allThreats by viewModel.allThreats.collectAsState(initial = emptyList())
-    val isLoading by viewModel.isLoading.collectAsState(initial = false)
-    val importStatus by viewModel.importStatus.collectAsState(initial = null)
-    val totalThreats = allThreats.size
+    val subscriptions by viewModel.subscriptions.collectAsState(initial = emptyList())
+    val isLoading by viewModel.isLoading.collectAsState()
+    val importStatus by viewModel.importStatus.collectAsState()
+    
+    val importedFeedNames = remember(subscriptions) { subscriptions.map { it.name }.toSet() }
+    var showImportMenu by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
+    var showAddFeedDialog by remember { mutableStateOf(false) }
 
-    var customFeedUrl by remember { mutableStateOf("") }
+    val primaryColor = Color(0xFF00D4FF)
 
-    // Group imported feeds by name
-    val importedFeedNames = remember(allThreats) { allThreats.map { it.feedName }.toSet() }
+    Column(modifier = Modifier.fillMaxSize().background(LocalGKColors.current.background)) {
+        // TopAppBar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(LocalGKColors.current.background)
+                .border(1.dp, Color.White.copy(alpha = 0.05f))
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Security, contentDescription = null, tint = primaryColor, modifier = Modifier.size(24.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("GateKeeper", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = primaryColor)
+            }
+        }
 
-    // Auto-clear status after 3 seconds for non-loading states
-    LaunchedEffect(importStatus) {
-        importStatus?.let {
-            if (it.contains("Successfully") || it.contains("Failed") || it.contains("removed")) {
-                kotlinx.coroutines.delay(3000)
-                viewModel.clearStatus()
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(top = 24.dp, bottom = 120.dp, start = 20.dp, end = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(24.dp)
+        ) {
+            // Header & Primary Action
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Threat Intel", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            Spacer(Modifier.height(4.dp))
+                            Text("Global intelligence feeds and active interception monitoring.", fontSize = 14.sp, color = LocalGKColors.current.textSecondary)
+                        }
+                        GKInfoButton(color = primaryColor) { showInfoDialog = true }
+                    }
+
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .weight(1.5f)
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(primaryColor)
+                                .clickable {
+                                    if (showImportMenu) viewModel.importAllRecommended() else showImportMenu = true
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.AddBox, contentDescription = null, tint = Color(0xFF001F27), modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (showImportMenu) "Import All" else "Import Feed", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF001F27))
+                            }
+                        }
+                        
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Color.White.copy(alpha = 0.1f))
+                                .border(1.dp, Color.White.copy(alpha = 0.2f), RoundedCornerShape(8.dp))
+                                .clickable { showAddFeedDialog = true },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Add Custom", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                            }
+                        }
+                    }
+                    
+                    if (isLoading || importStatus != null) {
+                        Text(importStatus ?: "Loading...", fontSize = 14.sp, color = primaryColor)
+                    }
+                }
+            }
+
+            // Active Feeds Grid
+            item {
+                Text("Active Feeds", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                Spacer(Modifier.height(12.dp))
+                
+                val availableFeeds = viewModel.recommendedFeeds.filter { !importedFeedNames.contains(it.name) }
+                
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    if (subscriptions.isEmpty()) {
+                        Text("No active feeds. Import a feed below to start blocking threats.", color = LocalGKColors.current.textSecondary, modifier = Modifier.padding(vertical = 16.dp))
+                    } else {
+                        subscriptions.forEach { sub ->
+                            FilterListCardThreat(subscription = sub, color = primaryColor, viewModel = viewModel)
+                        }
+                    }
+                    
+                    if (showImportMenu && availableFeeds.isNotEmpty()) {
+                        Text("Available Feeds", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White, modifier = Modifier.padding(top = 12.dp))
+                        availableFeeds.forEach { feed ->
+                            FeedCardReal(feed.name, feed.description, false) { viewModel.importFeed(feed) }
+                        }
+                    }
+                }
             }
         }
     }
 
-    Scaffold(
-        containerColor = LocalGKColors.current.background
-    ) { paddingValues ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(LocalGKColors.current.background)
-                .padding(paddingValues),
-            contentPadding = PaddingValues(bottom = 80.dp)
-        ) {
-            // ── Header ──
-            item {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(Brush.verticalGradient(listOf(LocalGKColors.current.accentRed.copy(alpha = 0.08f), LocalGKColors.current.background)))
-                        .padding(horizontal = 20.dp, vertical = 16.dp)
-                ) {
-                    // Back button for when navigated from Dashboard
-                    if (navController != null) {
-                        IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Filled.ArrowBack, "Back", tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(20.dp))
-                        }
-                        Spacer(Modifier.height(4.dp))
-                    }
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Box(
-                            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                                .background(Brush.linearGradient(GradientDanger.map { it.copy(alpha = 0.2f) })),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(Icons.Filled.Security, null, tint = LocalGKColors.current.accentRed, modifier = Modifier.size(22.dp))
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("Threat Intelligence", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
-                            Text(
-                                if (totalThreats > 0) "$totalThreats malicious indicators active" else "No feeds imported yet",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = LocalGKColors.current.textSecondary
-                            )
-                        }
-                    }
+    if (showInfoDialog) {
+        GKInfoDialog(
+            title = "Threat Intel",
+            body = "Threat Intel downloads lists of known malicious websites, hacker command servers, and malware sources from trusted security organisations worldwide.\n\nAny time an app on your phone tries to contact one of these servers, the connection is automatically blocked.\n\nThe lists update automatically so you're always protected against the latest threats.",
+            accentColor = primaryColor,
+            onDismiss = { showInfoDialog = false }
+        )
+    }
 
-                    // Stats
-                    if (totalThreats > 0) {
-                        Spacer(Modifier.height(16.dp))
-                        val ipCount = allThreats.count { it.indicatorType == "ip" }
-                        val domainCount = allThreats.count { it.indicatorType == "domain" }
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            StatCard("IP Threats", "$ipCount", GradientDanger, Modifier.weight(1f))
-                            StatCard("Domain Threats", "$domainCount", GradientPurple, Modifier.weight(1f))
-                        }
-                    }
+    if (showAddFeedDialog) {
+        var feedName by remember { mutableStateOf("") }
+        var feedUrl by remember { mutableStateOf("") }
+        var isError by remember { mutableStateOf(false) }
+        val isValid = feedName.trim().isNotBlank() &&
+            (feedUrl.trim().startsWith("http://") || feedUrl.trim().startsWith("https://"))
 
-                    // Clear all button
-                    if (totalThreats > 0) {
-                        Spacer(Modifier.height(8.dp))
-                        TextButton(
-                            onClick = { viewModel.clearAll() },
-                            enabled = !isLoading,
-                            colors = ButtonDefaults.textButtonColors(contentColor = LocalGKColors.current.accentRed)
-                        ) {
-                            Icon(Icons.Filled.DeleteSweep, null, modifier = Modifier.size(18.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text("Clear All Feeds", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-
-            // ── Active Feeds Section ──
-            if (importedFeedNames.isNotEmpty()) {
-                item {
-                    Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                        SectionHeader(title = "Active Feeds (${importedFeedNames.size})")
-                        Spacer(Modifier.height(8.dp))
-                    }
-                }
-                
-                val grouped = allThreats.groupBy { it.feedName }
-                items(grouped.entries.toList()) { (feedName, entries) ->
-                    val sourceUrl = entries.first().feedSource
-                    Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        GKListRow(
-                            icon = Icons.Filled.CheckCircle, iconTint = LocalGKColors.current.accentGreen,
-                            title = feedName,
-                            subtitle = "${entries.size} indicators",
-                            trailing = {
-                                IconButton(onClick = { viewModel.removeFeed(sourceUrl) }) {
-                                    Icon(Icons.Filled.DeleteOutline, "Remove Feed", tint = LocalGKColors.current.accentRed)
-                                }
-                            }
+        AlertDialog(
+            onDismissRequest = { showAddFeedDialog = false },
+            title = { Text("Add Custom Threat Feed") },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = feedName, onValueChange = { feedName = it },
+                        label = { Text("Feed Name") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = primaryColor,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+                            focusedLabelColor = primaryColor,
+                            unfocusedLabelColor = LocalGKColors.current.textSecondary,
+                            focusedTextColor = LocalGKColors.current.textPrimary,
+                            unfocusedTextColor = LocalGKColors.current.textPrimary
                         )
-                    }
-                }
-                
-                item { Spacer(Modifier.height(16.dp)) }
-            }
-
-            // ── Loading indicator ──
-            if (isLoading) {
-                item {
-                    Box(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator(color = LocalGKColors.current.primary, strokeWidth = 2.dp)
-                            Spacer(Modifier.height(12.dp))
-                            Text("Downloading & processing feed...", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.bodyMedium)
-                            Text("Large feeds may take 10–30 seconds.", color = LocalGKColors.current.textTertiary, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            } else if (importStatus != null) {
-                item {
-                    androidx.compose.animation.AnimatedContent(targetState = importStatus, label = "import_status") { status ->
-                        val isError = status?.contains("Failed") == true
-                        val isSuccess = status?.contains("Successfully") == true || status?.contains("removed") == true
-                        val color = when {
-                            isError -> LocalGKColors.current.accentRed
-                            isSuccess -> LocalGKColors.current.accentGreen
-                            else -> LocalGKColors.current.primary
-                        }
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 8.dp)
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(color.copy(alpha = 0.15f))
-                                .padding(12.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(status ?: "", color = color, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
-
-            // ── Custom URL import ──
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    SectionHeader(title = "Custom Feed URL")
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        OutlinedTextField(
-                            value = customFeedUrl,
-                            onValueChange = { customFeedUrl = it },
-                            modifier = Modifier.weight(1f),
-                            placeholder = { Text("https://example.com/blocklist.txt", color = LocalGKColors.current.textTertiary) },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = LocalGKColors.current.primary,
-                                unfocusedBorderColor = LocalGKColors.current.border,
-                                focusedContainerColor = LocalGKColors.current.card,
-                                unfocusedContainerColor = LocalGKColors.current.card,
-                                focusedTextColor = LocalGKColors.current.textPrimary,
-                                unfocusedTextColor = LocalGKColors.current.textPrimary
-                            ),
-                            singleLine = true
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = feedUrl,
+                        onValueChange = { feedUrl = it; isError = false },
+                        label = { Text("URL (https://...)") }, modifier = Modifier.fillMaxWidth(), singleLine = true,
+                        isError = isError,
+                        supportingText = if (isError) { { Text("Must start with http:// or https://") } } else null,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = primaryColor,
+                            unfocusedBorderColor = Color.White.copy(alpha = 0.1f),
+                            focusedLabelColor = primaryColor,
+                            unfocusedLabelColor = LocalGKColors.current.textSecondary,
+                            focusedTextColor = LocalGKColors.current.textPrimary,
+                            unfocusedTextColor = LocalGKColors.current.textPrimary
                         )
-                        Spacer(Modifier.width(12.dp))
-                        FilledIconButton(
-                            onClick = {
-                                if (customFeedUrl.isNotBlank() && !isLoading) {
-                                    val safeUrl = if (!customFeedUrl.startsWith("http://") && !customFeedUrl.startsWith("https://")) {
-                                        "https://" + customFeedUrl.trim()
-                                    } else {
-                                        customFeedUrl.trim()
-                                    }
-                                    
-                                    val customFeed = ThreatFeedViewModel.FeedSource(
-                                        name = safeUrl.substringAfterLast("/").ifBlank { "Custom Feed" },
-                                        url = safeUrl,
-                                        type = "domain",
-                                        threatType = "custom",
-                                        description = "Manually imported feed"
-                                    )
-                                    viewModel.importFeed(customFeed)
-                                    customFeedUrl = ""
-                                }
-                            },
-                            enabled = !isLoading && customFeedUrl.isNotBlank(),
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.size(54.dp),
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = LocalGKColors.current.primary,
-                                contentColor = LocalGKColors.current.background,
-                                disabledContainerColor = LocalGKColors.current.surfaceVariant,
-                                disabledContentColor = LocalGKColors.current.textTertiary
-                            )
-                        ) {
-                            Icon(Icons.Filled.Download, null)
-                        }
-                    }
-                }
-            }
-
-            // ── Curated Feeds Section ──
-            item {
-                Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        SectionHeader(title = "Curated Threat Feeds")
-                        TextButton(
-                            onClick = { viewModel.importAllRecommended() },
-                            enabled = !isLoading,
-                            contentPadding = PaddingValues(0.dp)
-                        ) {
-                            Text("Import All", color = LocalGKColors.current.primary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        "Tap any feed to import it. All feeds are free and updated regularly.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = LocalGKColors.current.textTertiary
                     )
                 }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (isValid) {
+                            viewModel.importFeed(
+                                ThreatFeedViewModel.FeedSource(
+                                    name = feedName.trim(),
+                                    url = feedUrl.trim(),
+                                    type = "domain",
+                                    threatType = "custom",
+                                    description = "Custom user-added feed."
+                                )
+                            )
+                            showAddFeedDialog = false
+                        } else { isError = true }
+                    },
+                    enabled = isValid
+                ) { Text("Add") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddFeedDialog = false }) { Text("Cancel") }
             }
+        )
+    }
+}
 
-            items(viewModel.recommendedFeeds) { feed ->
-                val isImported = importedFeedNames.contains(feed.name)
-                ThreatFeedCard(
-                    feed = feed,
-                    isImported = isImported,
-                    isLoading = isLoading,
-                    onImport = { viewModel.importFeed(feed) },
-                    onRemove = { viewModel.removeFeed(feed.url) }
-                )
+@Composable
+fun FilterListCardThreat(subscription: com.gatekeeper.mobile.data.db.entity.BlocklistSubscription, color: Color, viewModel: ThreatFeedViewModel) {
+    val dateFormatter = remember { java.text.SimpleDateFormat("MMM dd, HH:mm", java.util.Locale.getDefault()) }
+    val lastUpdatedText = if (subscription.lastRefreshedAt > 0) dateFormatter.format(java.util.Date(subscription.lastRefreshedAt)) else "Never"
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+            .padding(16.dp)
+    ) {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Box(
+                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.1f))
+                        .border(1.dp, color.copy(alpha = 0.2f), RoundedCornerShape(10.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Shield, null, tint = color)
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Column {
+                    Text(subscription.name, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = LocalGKColors.current.textPrimary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    Text(subscription.url, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
             }
-
+            Switch(
+                checked = subscription.isEnabled,
+                onCheckedChange = { viewModel.toggleSubscription(subscription, it) },
+                colors = SwitchDefaults.colors(checkedThumbColor = color, checkedTrackColor = color.copy(alpha = 0.3f))
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = 0.2f)).border(1.dp, color.copy(alpha = 0.3f), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                    Text("${subscription.domainCount} Rules", style = MaterialTheme.typography.labelSmall, color = color, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                val statusColor = when (subscription.fetchStatus) {
+                    "SUCCESS" -> LocalGKColors.current.accentGreen
+                    "FAILED" -> LocalGKColors.current.accentRed
+                    "FETCHING" -> LocalGKColors.current.accentYellow
+                    else -> LocalGKColors.current.textTertiary
+                }
+                Text(if (subscription.fetchStatus == "FAILED") "Failed: ${subscription.errorReason ?: "Unknown"}" else "Sync: $lastUpdatedText", style = MaterialTheme.typography.labelSmall, color = statusColor, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            }
+            Row {
+                IconButton(onClick = { viewModel.toggleSubscription(subscription, true) }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Filled.Refresh, null, tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(18.dp))
+                }
+                Spacer(modifier = Modifier.width(4.dp))
+                IconButton(onClick = { viewModel.removeFeed(subscription) }, modifier = Modifier.size(28.dp)) {
+                    Icon(Icons.Filled.DeleteOutline, null, tint = LocalGKColors.current.accentRed, modifier = Modifier.size(18.dp))
+                }
+            }
         }
     }
 }
 
 @Composable
-fun ThreatFeedCard(
-    feed: ThreatFeedViewModel.FeedSource,
-    isImported: Boolean,
-    isLoading: Boolean,
-    onImport: () -> Unit,
-    onRemove: () -> Unit
-) {
-    val borderColor = if (isImported) LocalGKColors.current.accentGreen.copy(alpha = 0.4f) else LocalGKColors.current.border
-    val bgColor = if (isImported) LocalGKColors.current.accentGreen.copy(alpha = 0.05f) else LocalGKColors.current.card
+fun FilterButton(label: String, isSelected: Boolean = false, color: Color? = null, icon: androidx.compose.ui.graphics.vector.ImageVector? = null) {
+    val bgColor = if (isSelected) Color.White.copy(alpha = 0.1f) else Color.Transparent
+    val borderColor = color?.copy(alpha = 0.3f) ?: Color.White.copy(alpha = 0.2f)
+    val textColor = color ?: if (isSelected) Color.White else LocalGKColors.current.textSecondary
 
-    val (typeIcon, typeColor) = when (feed.threatType) {
-        "malware-c2" -> Icons.Filled.BugReport to LocalGKColors.current.accentRed
-        "malware"    -> Icons.Filled.Warning to LocalGKColors.current.accentRed
-        "phishing"   -> Icons.Filled.Report to LocalGKColors.current.accentOrange
-        "ads-tracking" -> Icons.Filled.Block to SecondaryPurple
-        "cryptominer" -> Icons.Filled.ElectricBolt to LocalGKColors.current.accentYellow
-        "ransomware" -> Icons.Filled.Lock to LocalGKColors.current.accentRed
-        else          -> Icons.Filled.Security to LocalGKColors.current.primary
-    }
-
-    Row(
+    Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(24.dp))
             .background(bgColor)
-            .then(
-                Modifier.background(
-                    Brush.horizontalGradient(listOf(borderColor.copy(alpha = 0f), borderColor.copy(alpha = 0f)))
-                )
-            )
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .border(1.dp, borderColor, RoundedCornerShape(24.dp))
+            .clickable { }
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
     ) {
-        // Type icon
-        Box(
-            modifier = Modifier
-                .size(40.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(typeColor.copy(alpha = 0.12f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(typeIcon, null, tint = typeColor, modifier = Modifier.size(20.dp))
-        }
-
-        Spacer(Modifier.width(12.dp))
-
-        Column(Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    feed.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    color = LocalGKColors.current.textPrimary,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1
-                )
-                if (isImported) {
-                    Spacer(Modifier.width(6.dp))
-                    Icon(Icons.Filled.CheckCircle, null, tint = LocalGKColors.current.accentGreen, modifier = Modifier.size(14.dp))
-                }
-            }
-            Text(
-                feed.description,
-                style = MaterialTheme.typography.bodySmall,
-                color = LocalGKColors.current.textTertiary,
-                maxLines = 2
-            )
-            Spacer(Modifier.height(2.dp))
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(typeColor.copy(alpha = 0.12f))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            ) {
-                Text(
-                    "${feed.type.uppercase()} • ${feed.threatType.replace("-", " ").uppercase()}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = typeColor,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-        }
-
-        Spacer(Modifier.width(8.dp))
-
-        // Action button
-        if (isImported) {
-            IconButton(
-                onClick = onRemove,
-                enabled = !isLoading,
-                modifier = Modifier.size(36.dp)
-            ) {
-                Icon(Icons.Filled.DeleteOutline, "Remove", tint = LocalGKColors.current.accentRed, modifier = Modifier.size(18.dp))
-            }
-        } else {
-            FilledTonalButton(
-                onClick = onImport,
-                enabled = !isLoading,
-                modifier = Modifier.height(34.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = LocalGKColors.current.accentRed.copy(alpha = 0.15f),
-                    contentColor = LocalGKColors.current.accentRed
-                )
-            ) {
-                Icon(Icons.Filled.Download, null, modifier = Modifier.size(14.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) {
+                Icon(icon, contentDescription = null, tint = textColor, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(4.dp))
-                Text("Import", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
             }
+            Text(label, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = textColor, letterSpacing = 0.5.sp)
         }
     }
 }
+
+
+@Composable
+fun FeedCardReal(title: String, desc: String, isActive: Boolean, onImport: (() -> Unit)? = null) {
+    val borderColor = Color.White.copy(alpha = 0.1f)
+    val bgColor = Color.White.copy(alpha = 0.05f)
+    val iconColor = LocalGKColors.current.textSecondary
+    
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(bgColor)
+            .border(1.dp, borderColor, RoundedCornerShape(12.dp))
+            .clickable { onImport?.invoke() }
+            .padding(24.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(iconColor.copy(alpha = 0.1f)).border(1.dp, iconColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Filled.Shield, null, tint = iconColor)
+                }
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                    Spacer(Modifier.height(4.dp))
+                    Text(desc, fontSize = 12.sp, color = LocalGKColors.current.textSecondary)
+                }
+            }
+        }
+        
+        Spacer(Modifier.width(16.dp))
+        
+        if (isActive) {
+            val pillColor = Color(0xFF5BFC80)
+            Box(modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(pillColor.copy(alpha = 0.1f)).padding(horizontal = 8.dp, vertical = 4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(pillColor))
+                    Spacer(Modifier.width(4.dp))
+                    Text("ACTIVE", fontSize = 10.sp, fontWeight = FontWeight.Bold, color = pillColor, letterSpacing = 1.sp)
+                }
+            }
+        } else {
+            Icon(Icons.Filled.AddCircleOutline, null, tint = Color(0xFF00D4FF))
+        }
+    }
+}
+

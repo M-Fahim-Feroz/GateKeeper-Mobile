@@ -1,6 +1,6 @@
 <div align="center">
   <h1>🛡️ GateKeeper Mobile</h1>
-  <p><b>AI-powered mobile security suite for Android</b></p>
+  <p><b>Mobile security suite for Android</b></p>
   <p><i>Combining per-app firewall, DNS filtering, traffic monitoring, and intelligent threat detection into one powerful application.</i></p>
 </div>
 
@@ -12,17 +12,23 @@ GateKeeper Mobile is the mobile counterpart of the GateKeeper Security Suite. De
 
 ## ✨ Key Features
 
-* **🛡️ Per-App Firewall**: Granular control over which applications can access Wi-Fi or Mobile Data. Intercepts and blocks unauthorized connections natively.
-* **🌐 DNS Sinkhole & Filtering**: Block intrusive ads, tracking domains, and known malware at the DNS level before the requests ever leave the device.
-* **📡 Real-Time Traffic Monitor**: Visualize your network activity with live bandwidth tracking, GeoIP resolution, and connection logs per application.
-* **🤖 AI Security Assistant**: Secure your device using natural language. The integrated AI (powered by the GateKeeper-Agent backend) allows you to say commands like *"Block Facebook"* or *"Show me recent threats"*.
+* **🛡️ Per-App Firewall**: Granular control over which applications can access Wi-Fi or Mobile Data. Intercepts and blocks unauthorized connections natively, including a global screen-off blocking mode.
+* **🌐 DNS Sinkhole & Filtering**: Block intrusive ads, tracking domains, and known malware at the DNS level before requests leave the device. Supports built-in lists, custom subscriptions, and DNS exfiltration detection.
+* **📡 Real-Time Traffic Monitor**: Visualize your network activity with live bandwidth tracking, MaxMind GeoIP resolution, and exportable connection logs per application.
 * **🔍 Threat Intelligence Integration**: Automatically cross-reference active connections with public threat feeds to instantly drop malicious packets.
+* **📶 Evil Twin Detection**: Scans Wi-Fi networks and alerts you when connecting to a suspicious Access Point with an unknown BSSID.
+* **📱 IMSI Catcher Detection**: Monitors cellular connection states and alerts you on suspicious 2G network downgrades indicating a potential Stingray attack.
+* **🕵️ Data Exfiltration Detection**: Correlates recent microphone and camera access with large outbound network uploads to detect privacy leaks in real-time.
+* **🔐 Certificate Auditor**: Scans user-installed CA certificates and identifies known MITM proxies or expired certificates.
+* **📊 Permission Auditor**: Analyzes all installed apps and assigns risk scores based on their declared sensitive permissions.
+* **🛑 Leak Prevention**: Detects and drops attempts by apps to bypass the VPN using custom DNS-over-HTTPS (DoH) resolvers or hardcoded IP addresses.
+* **💾 PCAP Capture**: Record raw network traffic to standard PCAP files directly from the device for external forensic analysis.
 
 ---
 
 ## 📸 Screenshots
 
-*(Add screenshots of the Dashboard, Firewall settings, Traffic Charts, and AI Chat here once available)*
+*(Add screenshots of the Dashboard, Firewall settings, and Traffic Charts here once available)*
 
 ---
 
@@ -81,8 +87,7 @@ For detailed tool versions and environment setups, please refer to [REQUIREMENTS
 
 GateKeeper Mobile is one piece of the larger **GateKeeper Security Suite FYP**. 
 
-While the firewall, DNS, and traffic logging work entirely on-device, the app integrates with the **GateKeeper-Agent** for advanced AI interactions:
-* **GateKeeper-Agent (AI Backend)**: Processes natural language commands sent from the mobile app via the `/chat` REST API.
+The firewall, DNS, and traffic logging work entirely on-device, providing robust and independent protection.
 * **Desktop Application**: The rules and activity logs can optionally be synchronized and viewed on the desktop React frontend.
 
 ---

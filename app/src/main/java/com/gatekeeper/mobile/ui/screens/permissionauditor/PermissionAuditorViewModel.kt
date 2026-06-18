@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import com.gatekeeper.mobile.vpn.PrivacyAccessLogger
@@ -93,30 +94,26 @@ class PermissionAuditorViewModel @Inject constructor(
         }
     }
 
-    fun simulateSensorData() {
+    fun exportLogs(context: android.content.Context) {
         viewModelScope.launch(Dispatchers.IO) {
-            val apps = listOf(
-                Pair("com.whatsapp", "WhatsApp"),
-                Pair("com.instagram.android", "Instagram"),
-                Pair("com.google.android.maps", "Google Maps"),
-                Pair("com.snapchat.android", "Snapchat"),
-                Pair("com.facebook.katana", "Facebook")
-            )
-            val sensors = listOf("CAMERA", "MICROPHONE", "LOCATION")
-            
-            val randomApp = apps.random()
-            val randomSensor = sensors.random()
-            
-            val log = SensorLog(
-                packageName = randomApp.first,
-                appName = randomApp.second,
-                sensorType = randomSensor,
-                startedAt = System.currentTimeMillis() - (Math.random() * 1000 * 60 * 60 * 2).toLong(), // Within last 2 hours
-                durationMs = (Math.random() * 1000 * 60 * 5).toLong() + 1000L, // 1s to 5 mins
-                isBackground = Math.random() > 0.7 // 30% chance of background access
-            )
-            
-            sensorLogRepository.simulateLog(log)
+            try {
+                val logs = sensorLogRepository.observeRecent().first()
+                val fileName = "GateKeeper_Hardware_Logs_${System.currentTimeMillis()}.csv"
+                val file = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), fileName)
+                file.bufferedWriter().use { writer ->
+                    writer.write("Timestamp,Package Name,Sensor,Detection Source,Allowed,Background\n")
+                    logs.forEach {
+                        writer.write("${it.startedAt},${it.packageName},${it.sensorType},${it.detectionSource.name},${it.isAllowed},${it.isBackground}\n")
+                    }
+                }
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Exported logs to Downloads: $fileName", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Export failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
 }

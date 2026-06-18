@@ -64,7 +64,7 @@ fun StatusBadge(
     modifier: Modifier = Modifier
 ) {
     val color by animateColorAsState(
-        targetValue = if (isActive) StatusOnline else StatusOffline,
+        targetValue = if (isActive) LocalGKColors.current.statusOnline else LocalGKColors.current.statusOffline,
         animationSpec = tween(500),
         label = "badge_color"
     )

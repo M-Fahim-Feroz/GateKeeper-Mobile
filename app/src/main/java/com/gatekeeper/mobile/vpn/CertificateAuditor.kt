@@ -6,6 +6,7 @@ import android.os.Build
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.first
 import java.security.KeyStore
 import java.security.cert.X509Certificate
 import java.text.SimpleDateFormat
@@ -14,14 +15,27 @@ import java.util.Locale
 import com.gatekeeper.mobile.data.repository.SecurityAlertRepository
 import javax.inject.Inject
 import javax.inject.Singleton
+import android.util.Base64
+import java.security.MessageDigest
 
-data class RogueCertInfo(
+data class CertificateInfo(
     val alias: String,
-    val issuerName: String,
     val subjectName: String,
-    val expiresAt: String,
-    val riskLevel: String, // "HIGH", "MEDIUM", "LOW"
-    val isUserInstalled: Boolean
+    val issuerName: String,
+    val serialNumber: String?,
+    val validFrom: Long,
+    val validUntil: Long,
+    val isSystemCertificate: Boolean,
+    val isUserCertificate: Boolean,
+    val isExpired: Boolean,
+    val trustStatus: String,
+    val sha1Fingerprint: String,
+    val sha256Fingerprint: String,
+    val signatureAlgorithm: String,
+    val publicKeyAlgorithm: String,
+    val pemEncoded: String,
+    val detectedTrustingApps: List<String>,
+    val detectionConfidence: String // "HIGH", "MEDIUM", "LOW"
 )
 
 data class VulnerableAppInfo(
@@ -58,6 +72,7 @@ class CertificateAuditor @Inject constructor(
                     val appName = pm.getApplicationLabel(appInfo).toString()
                     vulnerableApps.add(VulnerableAppInfo(appInfo.packageName, appName))
                 }
+                // TODO: Parse AndroidManifest.xml networkSecurityConfig for targetSdkVersion >= 24
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error finding vulnerable apps", e)
@@ -66,24 +81,49 @@ class CertificateAuditor @Inject constructor(
         return@withContext vulnerableApps.sortedBy { it.appName }
     }
 
-    suspend fun auditCertificates(): Pair<List<RogueCertInfo>, List<RogueCertInfo>> = withContext(Dispatchers.IO) {
-        val userCerts = mutableListOf<RogueCertInfo>()
-        val systemCerts = mutableListOf<RogueCertInfo>()
+    private fun getFingerprint(cert: X509Certificate, algorithm: String): String {
+        return try {
+            val md = MessageDigest.getInstance(algorithm)
+            val der = cert.encoded
+            md.update(der)
+            val digest = md.digest()
+            digest.joinToString(":") { "%02X".format(it) }
+        } catch (e: Exception) {
+            "Unknown"
+        }
+    }
+
+    private fun getPem(cert: X509Certificate): String {
+        return try {
+            val encoded = Base64.encodeToString(cert.encoded, Base64.DEFAULT)
+            "-----BEGIN CERTIFICATE-----\n$encoded-----END CERTIFICATE-----"
+        } catch (e: Exception) {
+            "Unknown"
+        }
+    }
+
+    suspend fun auditCertificates(context: Context): Pair<List<CertificateInfo>, List<CertificateInfo>> = withContext(Dispatchers.IO) {
+        val userCerts = mutableListOf<CertificateInfo>()
+        val systemCerts = mutableListOf<CertificateInfo>()
         try {
             val ks = KeyStore.getInstance("AndroidCAStore")
             ks.load(null, null)
             
             val aliases = ks.aliases().toList()
+            val trustingApps = getAppsTrustingUserCAs(context).map { it.appName }
             
+            val now = System.currentTimeMillis()
+            val existingAlerts = securityAlertRepository.observeUnresolved().first()
+
             for (alias in aliases) {
                 val cert = ks.getCertificate(alias) as? X509Certificate ?: continue
                 
                 val issuerDn = cert.issuerDN.name ?: "Unknown"
                 val subjectDn = cert.subjectDN.name ?: "Unknown"
-                val expiry = cert.notAfter
-                
-                val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
-                val expiresStr = if (expiry != null) formatter.format(expiry) else "Unknown"
+                val validFrom = cert.notBefore?.time ?: 0L
+                val validUntil = cert.notAfter?.time ?: 0L
+                val serialNumber = cert.serialNumber?.toString(16)?.uppercase() ?: "Unknown"
+                val isExpired = validUntil < now
                 
                 val isUserInstalled = alias.startsWith("user:")
                 
@@ -94,31 +134,45 @@ class CertificateAuditor @Inject constructor(
                     isUserInstalled -> "MEDIUM"
                     else -> "LOW"
                 }
-                
-                val certInfo = RogueCertInfo(
+
+                val certInfo = CertificateInfo(
                     alias = alias,
-                    issuerName = issuerDn,
                     subjectName = subjectDn,
-                    expiresAt = expiresStr,
-                    riskLevel = riskLevel,
-                    isUserInstalled = isUserInstalled
+                    issuerName = issuerDn,
+                    serialNumber = serialNumber,
+                    validFrom = validFrom,
+                    validUntil = validUntil,
+                    isSystemCertificate = !isUserInstalled,
+                    isUserCertificate = isUserInstalled,
+                    isExpired = isExpired,
+                    trustStatus = if (isExpired) "Expired" else if (riskLevel == "HIGH") "Untrusted/Risky" else "Trusted",
+                    sha1Fingerprint = getFingerprint(cert, "SHA-1"),
+                    sha256Fingerprint = getFingerprint(cert, "SHA-256"),
+                    signatureAlgorithm = cert.sigAlgName ?: "Unknown",
+                    publicKeyAlgorithm = cert.publicKey?.algorithm ?: "Unknown",
+                    pemEncoded = getPem(cert),
+                    detectedTrustingApps = if (isUserInstalled) trustingApps else emptyList(),
+                    detectionConfidence = riskLevel
                 )
                 
                 if (isUserInstalled) {
                     // Generate Alert
-                    securityAlertRepository.addAlert(
-                        type = "ROGUE_CA",
-                        severity = riskLevel,
-                        title = "Suspicious Root Certificate",
-                        description = "A user-installed certificate issued by '$issuerDn' could be used to decrypt your secure HTTPS traffic."
-                    )
-                    
                     if (riskLevel == "HIGH") {
-                        notificationManager.sendSecurityAlert(
-                            title = "🔐 Rogue Certificate Found",
-                            message = "A highly suspicious root certificate ($issuerDn) was detected.",
-                            route = "cert_audit"
-                        )
+                        val desc = "A user-installed certificate issued by '$issuerDn' could be used to decrypt your secure HTTPS traffic."
+                        val alreadyAlerted = existingAlerts.any { alert -> alert.type == "ROGUE_CA" && alert.description == desc }
+                        if (!alreadyAlerted) {
+                            securityAlertRepository.addAlert(
+                                type = "ROGUE_CA",
+                                severity = riskLevel,
+                                title = "Suspicious Root Certificate",
+                                description = desc
+                            )
+                            notificationManager.sendSecurityAlert(
+                                title = "🔐 Rogue Certificate Found",
+                                message = "A highly suspicious root certificate ($issuerDn) was detected.",
+                                route = "cert_audit"
+                            )
+                        }
                     }
                     userCerts.add(certInfo)
                 } else {

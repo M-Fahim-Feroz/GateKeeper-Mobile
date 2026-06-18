@@ -54,14 +54,37 @@ data class ThreatAlert(
 )
 
 /** App permission audit result */
+enum class EffectivePermissionStatus {
+    GRANTED, // Allowed by OS and AppOps
+    DENIED, // Denied by OS or AppOps
+    BACKGROUND_ONLY, // Allowed in background
+    FOREGROUND_ONLY, // Allowed in foreground only
+    UNKNOWN // Cannot determine
+}
+
+enum class PermissionSource {
+    MANIFEST_DECLARED, // Found in Manifest
+    RUNTIME_GRANTED, // Allowed by OS
+    APP_OPS_ALLOWED // Allowed via AppOpsManager
+}
+
+data class DetailedPermission(
+    val permissionName: String,
+    val effectiveStatus: EffectivePermissionStatus,
+    val source: PermissionSource,
+    val isDangerous: Boolean
+)
+
 data class AppPermissionInfo(
     val packageName: String,
     val appName: String,
-    val permissions: List<String>,
+    val permissions: List<String>, // Keep for backward compatibility
+    val detailedPermissions: List<DetailedPermission> = emptyList(),
     val riskScore: Int,         // 0-100
     val riskTier: String,       // "CRITICAL", "HIGH", "MEDIUM", "LOW"
-    val dangerousPermissions: List<String>,
-    val icon: android.graphics.drawable.Drawable? = null
+    val dangerousPermissions: List<String>, // Keep for backward compatibility
+    val icon: android.graphics.drawable.Drawable? = null,
+    val isSystemApp: Boolean = false
 )
 
 /** Wi-Fi network scan result */

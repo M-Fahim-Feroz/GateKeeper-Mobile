@@ -34,17 +34,17 @@ data class GKColors(
 )
 
 val darkGKColors = GKColors(
-    background = Color(0xFF09090B),
-    surface = Color(0xFF0E1525),
-    surfaceVariant = Color(0xFF151E30),
-    card = Color(0xFF1A2438),
-    cardElevated = Color(0xFF21304A),
-    cardHover = Color(0xFF263856),
-    border = Color(0x26FFFFFF),
-    borderFocus = Color(0x5500E5FF),
-    textPrimary = Color(0xFFF0F6FF),
-    textSecondary = Color(0xFF8BA3C1),
-    textTertiary = Color(0xFF526480),
+    background = Color(0xFF05070A),
+    surface = Color(0xFF1C2026),
+    surfaceVariant = Color(0xFF232830),
+    card = Color.White.copy(alpha = 0.05f),
+    cardElevated = Color.White.copy(alpha = 0.08f),
+    cardHover = Color.White.copy(alpha = 0.12f),
+    border = Color.White.copy(alpha = 0.08f),
+    borderFocus = Color(0xFF00E5FF).copy(alpha = 0.5f),
+    textPrimary = Color(0xFFFFFFFF),
+    textSecondary = Color(0xFFA0AAB5),
+    textTertiary = Color(0xFF6E7A8A),
     textOnPrimary = Color(0xFF080C18),
     primary = Color(0xFF00E5FF),
     accentRed = Color(0xFFFF5252),
@@ -52,7 +52,7 @@ val darkGKColors = GKColors(
     accentOrange = Color(0xFFFF8C42),
     accentYellow = Color(0xFFFFD740),
     accentTeal = Color(0xFF1DE9B6),
-    glassBg = Color(0x18FFFFFF),
+    glassBg = Color(0xFF05070A).copy(alpha = 0.85f),
     statusOnline = Color(0xFF00E676),
     statusOffline = Color(0xFFFF5252),
     statusWarning = Color(0xFFFF8C42),
@@ -65,11 +65,11 @@ val lightGKColors = GKColors(
     background = Color(0xFFF0F2FF), // Indigo-tinted white for glass base
     surface = Color(0xCCFFFFFF), // 80% white for translucent surface
     surfaceVariant = Color(0xFFF8FAFC),
-    card = Color(0xA6FFFFFF), // 65% white so cards appear to float
-    cardElevated = Color(0xB3FFFFFF), // 70% white elevated
-    cardHover = Color(0xBFFFFFFF), // 75% white hover
-    border = Color(0x336366F1), // 20% indigo for borders
-    borderFocus = Color(0xFF00BCD4), // Cyber teal
+    card = Color.White.copy(alpha = 0.72f),
+    cardElevated = Color.White.copy(alpha = 0.85f),
+    cardHover = Color.White.copy(alpha = 0.95f),
+    border = Color(0xFF6366F1).copy(alpha = 0.15f),
+    borderFocus = Color(0xFF00BCD4),
     textPrimary = Color(0xFF0F172A),
     textSecondary = Color(0xFF475569),
     textTertiary = Color(0xFF64748B),
@@ -101,6 +101,13 @@ val AccentOrange   = Color(0xFFFF8C42)
 val AccentYellow   = Color(0xFFFFD740)
 val AccentTeal     = Color(0xFF1DE9B6)
 
+// ── Module Identity Colors ────────────────────────────────────────────────────
+val ModuleAppGate     = Color(0xFF00C853)   // App Gate — Green
+val ModuleWebGate     = Color(0xFF7C4DFF)   // Web Gate — Purple
+val ModuleThreatIntel = Color(0xFFFFB300)   // Threat Intel — Amber
+val ModuleWifiGuard   = Color(0xFF00BCD4)   // Wi-Fi Guard — Teal
+val ModuleTrustCheck  = Color(0xFFFF5252)   // Trust Check — Red (same as accentRed)
+val ModulePrivacyScan = Color(0xFFFF9800)   // Privacy Scan — Orange
 val DarkSurface          = Color(0xFF0E1525)
 val DarkSurfaceVariant   = Color(0xFF151E30)
 val DarkCard             = Color(0xFF1A2438)

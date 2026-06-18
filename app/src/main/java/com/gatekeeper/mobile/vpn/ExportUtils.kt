@@ -45,7 +45,7 @@ class ExportUtils @Inject constructor(
             for (log in logs) {
                 val dateStr = dateFormat.format(Date(log.timestamp))
                 val status = if (log.wasBlocked) "BLOCKED" else "ALLOWED"
-                writer.append("\${log.id},\$dateStr,\${log.packageName},\${log.protocol},\${log.localIp},\${log.localPort},\${log.remoteIp},\${log.remotePort},\${log.bytesIn},\${log.bytesOut},\$status\n")
+                writer.append("${log.id},$dateStr,${log.packageName},${log.protocol},${log.sourceIp},${log.sourcePort},${log.destinationIp},${log.destinationPort},${log.bytesReceived},${log.bytesSent},$status\n")
             }
             
             writer.flush()

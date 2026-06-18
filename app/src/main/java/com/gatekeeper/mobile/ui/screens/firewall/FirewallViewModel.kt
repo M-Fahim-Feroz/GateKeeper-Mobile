@@ -53,8 +53,12 @@ class FirewallViewModel @Inject constructor(
     private fun loadApps() {
         viewModelScope.launch {
             _isLoading.value = true
-            val installedApps = getInstalledApps(includeSystem = false)
-            val rulesMap = firewallRepository.getAllRules().associateBy { it.packageName }
+            val installedApps = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                getInstalledApps(includeSystem = false)
+            }
+            val rulesMap = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                firewallRepository.getAllRules().associateBy { it.packageName }
+            }
 
             _apps.value = installedApps.map { app ->
                 val rule = rulesMap[app.packageName]

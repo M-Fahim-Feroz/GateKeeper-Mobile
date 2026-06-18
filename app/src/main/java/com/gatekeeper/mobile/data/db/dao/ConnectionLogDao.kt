@@ -33,10 +33,10 @@ interface ConnectionLogDao {
     @Query("SELECT COUNT(*) FROM connection_logs")
     fun observeTotalCount(): Flow<Int>
 
-    @Query("SELECT SUM(bytesIn) FROM connection_logs")
+    @Query("SELECT SUM(bytesReceived) FROM connection_logs")
     fun observeTotalBytesIn(): Flow<Long?>
 
-    @Query("SELECT SUM(bytesOut) FROM connection_logs")
+    @Query("SELECT SUM(bytesSent) FROM connection_logs")
     fun observeTotalBytesOut(): Flow<Long?>
 
     @Insert

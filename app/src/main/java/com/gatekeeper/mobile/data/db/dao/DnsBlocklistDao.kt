@@ -17,6 +17,18 @@ interface DnsBlocklistDao {
     @Query("SELECT domain FROM dns_entries WHERE listType = 'whitelist' AND isActive = 1")
     suspend fun getActiveWhitelistDomains(): List<String>
 
+    @Query("SELECT domain FROM dns_entries WHERE listType = 'blacklist' AND isActive = 1 LIMIT :limit OFFSET :offset")
+    suspend fun getBlacklistPage(limit: Int, offset: Int): List<String>
+
+    @Query("SELECT domain FROM dns_entries WHERE listType = 'whitelist' AND isActive = 1 LIMIT :limit OFFSET :offset")
+    suspend fun getWhitelistPage(limit: Int, offset: Int): List<String>
+
+    @Query("SELECT COUNT(*) FROM dns_entries WHERE listType = 'blacklist' AND isActive = 1")
+    suspend fun getBlacklistCount(): Int
+
+    @Query("SELECT COUNT(*) FROM dns_entries WHERE listType = 'whitelist' AND isActive = 1")
+    suspend fun getWhitelistCount(): Int
+
     @Query("SELECT COUNT(*) FROM dns_entries WHERE listType = :listType AND isActive = 1")
     fun observeCount(listType: String): Flow<Int>
 

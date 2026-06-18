@@ -1,14 +1,19 @@
 package com.gatekeeper.mobile.ui.screens.firewall
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -16,438 +21,319 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
 import com.gatekeeper.mobile.domain.model.InstalledApp
-import com.gatekeeper.mobile.ui.components.*
-import com.gatekeeper.mobile.ui.theme.*
+import com.gatekeeper.mobile.ui.components.GKEmptyState
+import com.gatekeeper.mobile.ui.components.GKInfoButton
+import com.gatekeeper.mobile.ui.components.GKInfoDialog
+import com.gatekeeper.mobile.ui.theme.LocalGKColors
 import com.gatekeeper.mobile.vpn.GateKeeperVpnService
 
 @Composable
-fun FirewallScreen(viewModel: FirewallViewModel = hiltViewModel()) {
+fun FirewallScreen(navController: NavController, viewModel: FirewallViewModel = hiltViewModel()) {
     val apps by viewModel.apps.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
-    val excludedCount by viewModel.blockedCount.collectAsState(initial = 0)
-    val isVpnActive by GateKeeperVpnService.isRunning.collectAsState()
     val screenOffBlockedPkgs by viewModel.screenOffBlockedPkgs.collectAsState()
+    val isVpnActive by GateKeeperVpnService.isRunning.collectAsState()
+    val blockedCount by viewModel.blockedCount.collectAsState(initial = 0)
 
     var searchQuery by remember { mutableStateOf("") }
-    var showExcludedOnly by remember { mutableStateOf(false) }
-    var showAllowedOnly by remember { mutableStateOf(false) }
+    var filterMode by remember { mutableStateOf("All") } // "All", "Blocked", "Allowed"
+    var showInfoDialog by remember { mutableStateOf(false) }
 
     val displayed = apps
-        .filter { when {
-            showExcludedOnly -> it.isBlocked
-            showAllowedOnly  -> !it.isBlocked
-            else             -> true
-        }}
+        .filter {
+            when (filterMode) {
+                "Blocked" -> it.isBlocked
+                "Allowed" -> !it.isBlocked
+                else -> true
+            }
+        }
         .filter { it.appName.contains(searchQuery, ignoreCase = true) || it.packageName.contains(searchQuery, ignoreCase = true) }
 
+    val primaryColor = Color(0xFF00D4FF)
+
     Column(
-        modifier = Modifier.fillMaxSize().background(LocalGKColors.current.background)
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color(0xFF05070A))
     ) {
-        // Header Section
-        Column(
+        // TopAppBar
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(LocalGKColors.current.primary.copy(alpha = 0.06f), LocalGKColors.current.background)))
-                .padding(horizontal = 20.dp, vertical = 20.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                        .background(Brush.linearGradient(GradientPrimary.map { it.copy(alpha = 0.2f) })),
-                    contentAlignment = Alignment.Center
+            Icon(Icons.Filled.Security, contentDescription = null, tint = primaryColor, modifier = Modifier.size(24.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("GateKeeper", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = primaryColor)
+        }
+
+        Box(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp)
+            ) {
+                // Header & Search
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(Icons.Filled.Shield, null, tint = LocalGKColors.current.primary, modifier = Modifier.size(22.dp))
+                    Text("App Gate", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = LocalGKColors.current.textPrimary)
+                    GKInfoButton(color = primaryColor) { showInfoDialog = true }
                 }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("App Firewall", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
-                    Text("$excludedCount apps blocked from internet", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
-                }
-            }
+                Text("Control network access per application.", style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textSecondary, modifier = Modifier.padding(top = 4.dp))
 
-            Spacer(Modifier.height(16.dp))
-
-            // VPN warning banner
-            if (!isVpnActive) {
-                Box(Modifier.fillMaxWidth().height(3.dp).background(LocalGKColors.current.accentOrange.copy(alpha = 0.7f)))
-                Spacer(Modifier.height(12.dp))
-            }
-
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Search installed apps...", color = LocalGKColors.current.textTertiary) },
-                leadingIcon = { Icon(Icons.Filled.Search, "Search", tint = LocalGKColors.current.textTertiary) },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) IconButton(onClick = { searchQuery = "" }) {
-                        Icon(Icons.Filled.Clear, "Clear search", tint = LocalGKColors.current.textTertiary)
+                // VPN-Off Warning Banner
+                AnimatedVisibility(
+                    visible = !isVpnActive,
+                    modifier = Modifier.padding(top = 16.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(0xFFFFB300).copy(alpha = 0.12f))
+                            .border(1.dp, Color(0xFFFFB300).copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                            .padding(16.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Filled.Warning, null, tint = Color(0xFFFFB300), modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text("VPN Inactive", style = MaterialTheme.typography.titleSmall, color = Color(0xFFFFB300), fontWeight = FontWeight.Bold)
+                                Text("Firewall rules configured but NOT enforced. Enable VPN from Dashboard.", style = MaterialTheme.typography.bodySmall, color = Color(0xFFFFB300).copy(alpha = 0.8f))
+                            }
+                        }
                     }
-                },
-                shape = RoundedCornerShape(14.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = LocalGKColors.current.primary,
-                    unfocusedBorderColor = LocalGKColors.current.border,
-                    focusedContainerColor = LocalGKColors.current.card,
-                    unfocusedContainerColor = LocalGKColors.current.card,
-                    focusedTextColor = LocalGKColors.current.textPrimary,
-                    unfocusedTextColor = LocalGKColors.current.textPrimary
-                ),
-                singleLine = true
-            )
+                }
 
-            Spacer(Modifier.height(16.dp))
-
-            // VPN OS Limitation Warning
-            androidx.compose.animation.AnimatedVisibility(visible = excludedCount > 0) {
-                Box(
+                // Search Bar
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(LocalGKColors.current.accentOrange.copy(alpha = 0.1f))
-                        .padding(16.dp)
+                        .padding(top = 16.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color.White.copy(alpha = 0.03f))
+                        .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row {
-                        Icon(Icons.Filled.WarningAmber, null, tint = LocalGKColors.current.accentOrange, modifier = Modifier.size(24.dp))
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text("Global DNS Filter Paused", style = MaterialTheme.typography.titleSmall, color = LocalGKColors.current.accentOrange, fontWeight = FontWeight.Bold)
-                            Text(
-                                "Due to Android OS limitations, when the App Firewall is active, all unblocked apps must bypass the VPN entirely to maintain internet speed. The DNS Filter will only resume when all apps are unblocked.",
-                                style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary, modifier = Modifier.padding(top = 4.dp)
+                    Icon(Icons.Filled.Search, null, tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    BasicTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = LocalGKColors.current.textPrimary),
+                        cursorBrush = SolidColor(primaryColor),
+                        modifier = Modifier.weight(1f),
+                        decorationBox = { innerTextField ->
+                            if (searchQuery.isEmpty()) {
+                                Text("Search installed apps...", color = LocalGKColors.current.textSecondary.copy(alpha = 0.5f), style = MaterialTheme.typography.bodyMedium)
+                            }
+                            innerTextField()
+                        }
+                    )
+                }
+
+                // Filter Chips
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    val allCount = apps.size
+                    val allowedCount = allCount - blockedCount
+                    FilterChipButton("All ($allCount)", filterMode == "All", primaryColor) { filterMode = "All" }
+                    FilterChipButton("Blocked ($blockedCount)", filterMode == "Blocked", primaryColor) { filterMode = "Blocked" }
+                    FilterChipButton("Allowed ($allowedCount)", filterMode == "Allowed", primaryColor) { filterMode = "Allowed" }
+                }
+
+                if (isLoading) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = primaryColor)
+                    }
+                } else if (displayed.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        GKEmptyState(icon = Icons.Filled.SearchOff, title = "No Apps Found", subtitle = "Try adjusting your filters.")
+                    }
+                } else {
+                    LazyColumn(
+                        contentPadding = PaddingValues(bottom = 120.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(displayed, key = { it.packageName }) { app ->
+                            AppFirewallHtmlItem(
+                                app = app,
+                                isScreenOffBlocked = app.packageName in screenOffBlockedPkgs,
+                                onToggle = { isAllowed -> viewModel.toggleBlock(app.packageName, app.appName, !isAllowed) },
+                                onScreenOffToggle = { block -> viewModel.toggleScreenOffBlock(app.packageName, app.appName, block) }
                             )
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = !showExcludedOnly && !showAllowedOnly,
-                    onClick = { showExcludedOnly = false; showAllowedOnly = false },
-                    label = { Text("All (${apps.size})") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = LocalGKColors.current.primary.copy(alpha = 0.15f),
-                        selectedLabelColor = LocalGKColors.current.primary
-                    )
-                )
-                FilterChip(
-                    selected = showExcludedOnly,
-                    onClick = { showExcludedOnly = true; showAllowedOnly = false },
-                    label = { Text("Blocked ($excludedCount)") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = LocalGKColors.current.accentRed.copy(alpha = 0.15f),
-                        selectedLabelColor = LocalGKColors.current.accentRed
-                    )
-                )
-                FilterChip(
-                    selected = showAllowedOnly,
-                    onClick = { showAllowedOnly = true; showExcludedOnly = false },
-                    label = { Text("Allowed (${apps.size - excludedCount})") },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = LocalGKColors.current.accentGreen.copy(alpha = 0.15f),
-                        selectedLabelColor = LocalGKColors.current.accentGreen
-                    )
-                )
-            }
         }
 
-        if (isLoading) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CircularProgressIndicator(color = LocalGKColors.current.primary, strokeWidth = 2.dp)
-                    Spacer(Modifier.height(12.dp))
-                    Text("Loading installed apps...", color = LocalGKColors.current.textSecondary, style = MaterialTheme.typography.bodyMedium)
-                }
-            }
-        } else if (displayed.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                GKEmptyState(
-                    icon = Icons.Filled.SearchOff,
-                    title = "No Apps Found",
-                    subtitle = "Try adjusting your filters or search query."
-                )
-            }
-        } else {
-            LazyColumn(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(displayed, key = { it.packageName }) { app ->
-                    AppFirewallItem(
-                        app = app,
-                        isScreenOffBlocked = app.packageName in screenOffBlockedPkgs,
-                        onToggle = { excluded -> viewModel.toggleBlock(app.packageName, app.appName, excluded) },
-                        onScreenOffToggle = { block -> viewModel.toggleScreenOffBlock(app.packageName, app.appName, block) },
-                        onScheduleUpdate = { enabled, start, end -> viewModel.updateSchedule(app.packageName, app.appName, enabled, start, end) }
-                    )
-                }
-                item { Spacer(Modifier.height(80.dp)) }
-            }
-        }
+    if (showInfoDialog) {
+        GKInfoDialog(
+            title = "App Gate",
+            body = "App Gate controls which apps on your phone can access the internet.\n\nToggle an app OFF to block it completely — it won't be able to send or receive any data, even in the background.\n\nThe \"Screen-off block\" option stops the app using internet while your screen is off, which saves battery and prevents background data leaks.",
+            accentColor = primaryColor,
+            onDismiss = { showInfoDialog = false }
+        )
+    }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AppFirewallItem(
+fun FilterChipButton(text: String, isSelected: Boolean, primaryColor: Color, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(24.dp))
+            .background(if (isSelected) primaryColor else Color.White.copy(alpha = 0.03f))
+            .border(1.dp, if (isSelected) primaryColor else Color.White.copy(alpha = 0.08f), RoundedCornerShape(24.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (isSelected) Color(0xFF00586B) else LocalGKColors.current.textPrimary
+        )
+    }
+}
+
+@Composable
+fun AppFirewallHtmlItem(
     app: InstalledApp,
     isScreenOffBlocked: Boolean,
     onToggle: (Boolean) -> Unit,
-    onScreenOffToggle: (Boolean) -> Unit,
-    onScheduleUpdate: (Boolean, Int, Int) -> Unit
+    onScreenOffToggle: (Boolean) -> Unit
 ) {
-    val excluded = app.isBlocked
-    var isExpanded by remember { mutableStateOf(false) }
+    val isAllowed = !app.isBlocked
+    
+    val statusColor = if (isAllowed) Color(0xFF37DF66) else LocalGKColors.current.accentRed
+    val statusIcon = if (isAllowed) Icons.Filled.CheckCircle else Icons.Filled.Block
+    val statusText = if (isAllowed) "Allowed" else "Blocked"
 
-    val shape = RoundedCornerShape(14.dp)
-    val borderBrush = if (excluded)
-        Brush.horizontalGradient(GradientOrange.map { it.copy(alpha = 0.4f) })
-    else
-        Brush.horizontalGradient(listOf(LocalGKColors.current.border, LocalGKColors.current.border))
+    var isExpanded by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(shape)
-            .background(LocalGKColors.current.card)
+            .clip(RoundedCornerShape(16.dp))
+            .background(Color.White.copy(alpha = 0.03f))
+            .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
             .clickable { isExpanded = !isExpanded }
-            .padding(horizontal = 14.dp, vertical = 12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val appIcon = remember(app.packageName) {
-                try { context.packageManager.getApplicationIcon(app.packageName) } catch (e: Exception) { null }
-            }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                val context = androidx.compose.ui.platform.LocalContext.current
+                val appIcon = remember(app.packageName) {
+                    try { context.packageManager.getApplicationIcon(app.packageName) } catch (e: Exception) { null }
+                }
 
-            Box(contentAlignment = Alignment.TopEnd) {
                 Box(
-                    modifier = Modifier.size(42.dp).clip(RoundedCornerShape(11.dp))
-                        .background(if (excluded) LocalGKColors.current.accentOrange.copy(alpha = 0.12f) else LocalGKColors.current.primary.copy(alpha = 0.08f)),
+                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(statusColor.copy(alpha = 0.1f)).border(1.dp, statusColor.copy(alpha = 0.2f), RoundedCornerShape(12.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     if (appIcon != null) {
-                        coil.compose.AsyncImage(model = appIcon, contentDescription = app.appName, modifier = Modifier.size(28.dp))
+                        coil.compose.AsyncImage(model = appIcon, contentDescription = app.appName, modifier = Modifier.size(32.dp))
                     } else {
-                        Icon(Icons.Filled.Apps, null, tint = if (excluded) LocalGKColors.current.accentOrange else LocalGKColors.current.primary, modifier = Modifier.size(22.dp))
+                        Icon(Icons.Filled.Apps, null, tint = statusColor, modifier = Modifier.size(28.dp))
                     }
                 }
-                // Risk dot overlay
-                if (app.sensitivePermCount >= 3) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(LocalGKColors.current.accentRed))
-                } else if (app.sensitivePermCount >= 1) {
-                    Box(Modifier.size(8.dp).clip(CircleShape).background(LocalGKColors.current.accentOrange))
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text(app.appName, style = MaterialTheme.typography.titleMedium, color = if (isAllowed) LocalGKColors.current.textPrimary else LocalGKColors.current.textPrimary.copy(alpha = 0.5f), maxLines = 1)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(statusIcon, null, tint = statusColor, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(statusText, style = MaterialTheme.typography.bodySmall, color = statusColor)
+                    }
                 }
             }
 
-            Spacer(Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(app.appName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = LocalGKColors.current.textPrimary, maxLines = 1)
-                Text(app.packageName, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textTertiary, maxLines = 1)
-            }
-
-            // Internet Block toggle
-            Switch(
-                checked = excluded,
-                onCheckedChange = { onToggle(it) },
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = LocalGKColors.current.accentRed,
-                    checkedTrackColor = LocalGKColors.current.accentRed.copy(alpha = 0.25f),
-                    uncheckedThumbColor = LocalGKColors.current.accentGreen.copy(alpha = 0.8f),
-                    uncheckedTrackColor = LocalGKColors.current.accentGreen.copy(alpha = 0.15f)
-                )
-            )
-        }
-
-        // F8: Screen-off blocking sub-row
-        androidx.compose.animation.AnimatedVisibility(visible = excluded || isScreenOffBlocked) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 54.dp, top = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.NightlightRound, null,
-                        tint = if (isScreenOffBlocked) LocalGKColors.current.accentOrange else LocalGKColors.current.textTertiary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        "Block when screen off",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = if (isScreenOffBlocked) LocalGKColors.current.accentOrange else LocalGKColors.current.textTertiary
-                    )
-                }
-                Switch(
-                    checked = isScreenOffBlocked,
-                    onCheckedChange = { onScreenOffToggle(it) },
-                    modifier = Modifier.size(width = 40.dp, height = 24.dp),
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = LocalGKColors.current.accentOrange,
-                        checkedTrackColor = LocalGKColors.current.accentOrange.copy(alpha = 0.25f),
-                        uncheckedThumbColor = LocalGKColors.current.textTertiary,
-                        uncheckedTrackColor = LocalGKColors.current.surface
-                    )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                HtmlToggleSwitch(
+                    checked = isAllowed,
+                    onCheckedChange = { onToggle(it) },
+                    activeColor = Color(0xFF37DF66)
                 )
             }
         }
 
-        // Schedule sub-row
-        androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-            ) {
-                HorizontalDivider(color = LocalGKColors.current.border, modifier = Modifier.padding(bottom = 8.dp))
-                
+        AnimatedVisibility(visible = isExpanded) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = 0.05f)))
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Filled.Schedule, null,
-                            tint = if (app.blockScheduleEnabled) LocalGKColors.current.primary else LocalGKColors.current.textTertiary,
-                            modifier = Modifier.size(16.dp)
-                        )
+                        Icon(Icons.Filled.ScreenLockPortrait, null, tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(8.dp))
                         Column {
+                            Text("Screen-off block", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
                             Text(
-                                "Time Schedule",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (app.blockScheduleEnabled) LocalGKColors.current.textPrimary else LocalGKColors.current.textSecondary
+                                "Blocks internet while your screen is off",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = LocalGKColors.current.textSecondary.copy(alpha = 0.5f)
                             )
-                            if (app.blockScheduleEnabled) {
-                                val startStr = String.format("%02d:%02d", app.blockStartMinutes / 60, app.blockStartMinutes % 60)
-                                val endStr = String.format("%02d:%02d", app.blockEndMinutes / 60, app.blockEndMinutes % 60)
-                                Text("$startStr - $endStr", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.primary)
-                            } else {
-                                Text("Not scheduled", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
-                            }
                         }
                     }
-
-                    Switch(
-                        checked = app.blockScheduleEnabled,
-                        onCheckedChange = { onScheduleUpdate(it, app.blockStartMinutes, app.blockEndMinutes) },
-                        modifier = Modifier.size(width = 40.dp, height = 24.dp),
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = LocalGKColors.current.primary,
-                            checkedTrackColor = LocalGKColors.current.primary.copy(alpha = 0.25f),
-                            uncheckedThumbColor = LocalGKColors.current.textTertiary,
-                            uncheckedTrackColor = LocalGKColors.current.surface
-                        )
+                    HtmlToggleSwitch(
+                        checked = isScreenOffBlocked,
+                        onCheckedChange = { onScreenOffToggle(it) },
+                        activeColor = Color(0xFF37DF66),
+                        modifier = Modifier.scale(0.75f)
                     )
-                }
-
-                if (app.blockScheduleEnabled) {
-                    var showStartTimePicker by remember { mutableStateOf(false) }
-                    var showEndTimePicker by remember { mutableStateOf(false) }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        OutlinedButton(
-                            onClick = { showStartTimePicker = true },
-                            border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.border),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalGKColors.current.textPrimary)
-                        ) {
-                            val startStr = String.format("%02d:%02d", app.blockStartMinutes / 60, app.blockStartMinutes % 60)
-                            Text("Start: $startStr", style = MaterialTheme.typography.bodySmall)
-                        }
-
-                        OutlinedButton(
-                            onClick = { showEndTimePicker = true },
-                            border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.border),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = LocalGKColors.current.textPrimary)
-                        ) {
-                            val endStr = String.format("%02d:%02d", app.blockEndMinutes / 60, app.blockEndMinutes % 60)
-                            Text("End: $endStr", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-
-                    if (showStartTimePicker) {
-                        TimePickerDialog(
-                            initialHour = app.blockStartMinutes / 60,
-                            initialMinute = app.blockStartMinutes % 60,
-                            onDismiss = { showStartTimePicker = false },
-                            onConfirm = { h, m ->
-                                onScheduleUpdate(true, h * 60 + m, app.blockEndMinutes)
-                                showStartTimePicker = false
-                            }
-                        )
-                    }
-
-                    if (showEndTimePicker) {
-                        TimePickerDialog(
-                            initialHour = app.blockEndMinutes / 60,
-                            initialMinute = app.blockEndMinutes % 60,
-                            onDismiss = { showEndTimePicker = false },
-                            onConfirm = { h, m ->
-                                onScheduleUpdate(true, app.blockStartMinutes, h * 60 + m)
-                                showEndTimePicker = false
-                            }
-                        )
-                    }
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TimePickerDialog(
-    initialHour: Int,
-    initialMinute: Int,
-    onDismiss: () -> Unit,
-    onConfirm: (Int, Int) -> Unit
-) {
-    val state = rememberTimePickerState(
-        initialHour = initialHour,
-        initialMinute = initialMinute,
-        is24Hour = true
+fun HtmlToggleSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, activeColor: Color, modifier: Modifier = Modifier) {
+    val offsetX by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (checked) 24.dp else 2.dp,
+        animationSpec = androidx.compose.animation.core.spring(stiffness = 400f),
+        label = "toggle_offset"
     )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = LocalGKColors.current.surfaceVariant,
-        title = { Text("Select Time", color = LocalGKColors.current.textPrimary) },
-        text = {
-            TimePicker(state = state, colors = TimePickerDefaults.colors(
-                clockDialColor = LocalGKColors.current.background,
-                selectorColor = LocalGKColors.current.primary,
-                containerColor = LocalGKColors.current.card,
-                timeSelectorSelectedContainerColor = LocalGKColors.current.primary.copy(alpha = 0.2f),
-                timeSelectorUnselectedContainerColor = LocalGKColors.current.card,
-                timeSelectorSelectedContentColor = LocalGKColors.current.primary,
-                timeSelectorUnselectedContentColor = LocalGKColors.current.textPrimary
-            ))
-        },
-        confirmButton = {
-            TextButton(onClick = { onConfirm(state.hour, state.minute) }) {
-                Text("OK", color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = LocalGKColors.current.textSecondary)
-            }
-        }
-    )
+    Box(
+        modifier = modifier
+            .size(width = 48.dp, height = 26.dp)
+            .clip(RoundedCornerShape(13.dp))
+            .background(if (checked) activeColor.copy(alpha = 0.2f) else Color.White.copy(alpha = 0.1f))
+            .border(1.dp, if (checked) activeColor else Color.White.copy(alpha = 0.1f), RoundedCornerShape(13.dp))
+            .clickable(role = androidx.compose.ui.semantics.Role.Switch, onClick = { onCheckedChange(!checked) })
+    ) {
+        Box(
+            modifier = Modifier
+                .offset(x = offsetX, y = 4.dp)
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(if (checked) activeColor else Color(0xFF859398))
+        )
+    }
 }

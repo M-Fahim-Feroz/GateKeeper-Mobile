@@ -11,16 +11,20 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import com.gatekeeper.mobile.data.db.dao.BlocklistSubscriptionDao
+import com.gatekeeper.mobile.data.db.entity.BlocklistSubscription
 import javax.inject.Inject
 
 @HiltViewModel
 class ThreatFeedViewModel @Inject constructor(
     private val repository: ThreatFeedRepository,
-    private val manager: ThreatFeedManager
+    private val manager: ThreatFeedManager,
+    private val blocklistSubscriptionDao: BlocklistSubscriptionDao
 ) : ViewModel() {
 
     val allThreats: Flow<List<ThreatFeedEntry>> = repository.observeAll()
     val totalThreats: Flow<Int> = repository.observeCount()
+    val subscriptions: Flow<List<BlocklistSubscription>> = blocklistSubscriptionDao.observeAll()
     
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -47,10 +51,10 @@ class ThreatFeedViewModel @Inject constructor(
 
         // ── Phishing ───────────────────────────────────────────────────────────
         FeedSource(
-            name = "OpenPhish Phishing URLs (Domains)",
-            url = "https://openphish.com/feed.txt",
+            name = "PhishTank Active Domains",
+            url = "https://raw.githubusercontent.com/mitchellkrogza/Phishing.Database/master/phishing-domains-ACTIVE.txt",
             type = "domain", threatType = "phishing",
-            description = "Community phishing feed. Continuously updated."
+            description = "Community-maintained active phishing domains. Updated daily."
         ),
 
         // ── Ads & Tracking ─────────────────────────────────────────────────────
@@ -75,13 +79,6 @@ class ThreatFeedViewModel @Inject constructor(
             description = "Blocks crypto mining scripts running in browser or apps."
         ),
 
-        // ── Ransomware / Spyware ───────────────────────────────────────────────
-        FeedSource(
-            name = "Abuse.ch Ransomware Tracker Domains",
-            url = "https://ransomwaretracker.abuse.ch/downloads/RW_DOMBL.txt",
-            type = "domain", threatType = "ransomware",
-            description = "Known ransomware distribution and C2 domains."
-        )
     )
 
     data class FeedSource(
@@ -100,6 +97,16 @@ class ThreatFeedViewModel @Inject constructor(
             val result = manager.importFromUrl(feed.url, feed.name, feed.type, feed.threatType)
             
             result.onSuccess { count ->
+                val sub = BlocklistSubscription(
+                    id = feed.url.hashCode().toString(),
+                    name = feed.name,
+                    url = feed.url,
+                    type = "threat_intel",
+                    isEnabled = true,
+                    lastRefreshedAt = System.currentTimeMillis(),
+                    domainCount = count
+                )
+                blocklistSubscriptionDao.upsert(sub)
                 _importStatus.value = "Successfully imported $count threats."
             }.onFailure { e ->
                 _importStatus.value = "Failed to import feed: ${e.message}"
@@ -121,7 +128,22 @@ class ThreatFeedViewModel @Inject constructor(
             recommendedFeeds.forEachIndexed { index, feed ->
                 _importStatus.value = "Importing ${index + 1}/$total… ${feed.name}"
                 val result = manager.importFromUrl(feed.url, feed.name, feed.type, feed.threatType)
-                if (result.isSuccess) successCount++ else failCount++
+                if (result.isSuccess) {
+                    val count = result.getOrDefault(0)
+                    val sub = BlocklistSubscription(
+                        id = feed.url.hashCode().toString(),
+                        name = feed.name,
+                        url = feed.url,
+                        type = "threat_intel",
+                        isEnabled = true,
+                        lastRefreshedAt = System.currentTimeMillis(),
+                        domainCount = count
+                    )
+                    blocklistSubscriptionDao.upsert(sub)
+                    successCount++
+                } else {
+                    failCount++
+                }
             }
             
             if (failCount == 0) {
@@ -133,13 +155,36 @@ class ThreatFeedViewModel @Inject constructor(
         }
     }
 
-    fun removeFeed(sourceUrl: String) {
+    fun removeFeed(sub: BlocklistSubscription) {
         viewModelScope.launch {
             try {
-                repository.removeFeed(sourceUrl)
+                repository.removeFeed(sub.url)
+                blocklistSubscriptionDao.delete(sub)
                 _importStatus.value = "Feed removed."
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        }
+    }
+
+    fun toggleSubscription(sub: BlocklistSubscription, enabled: Boolean) {
+        viewModelScope.launch {
+            blocklistSubscriptionDao.upsert(sub.copy(isEnabled = enabled))
+            if (enabled) {
+                blocklistSubscriptionDao.updateRefreshStatus(sub.id, System.currentTimeMillis(), sub.domainCount, "FETCHING", null)
+                try {
+                    val feedThreatType = recommendedFeeds.find { it.url == sub.url }?.threatType ?: "malware"
+                    val result = manager.importFromUrl(sub.url, sub.name, sub.type, feedThreatType)
+                    result.onSuccess { count ->
+                        blocklistSubscriptionDao.updateRefreshStatus(sub.id, System.currentTimeMillis(), count, "SUCCESS", null)
+                    }.onFailure { e ->
+                        blocklistSubscriptionDao.updateRefreshStatus(sub.id, System.currentTimeMillis(), sub.domainCount, "FAILED", e.message ?: "Unknown Error")
+                    }
+                } catch (e: Exception) {
+                    blocklistSubscriptionDao.updateRefreshStatus(sub.id, System.currentTimeMillis(), sub.domainCount, "FAILED", e.message ?: "Unknown Error")
+                }
+            } else {
+                repository.removeFeed(sub.url)
             }
         }
     }

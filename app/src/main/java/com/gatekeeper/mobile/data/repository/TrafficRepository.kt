@@ -31,10 +31,10 @@ class TrafficRepository @Inject constructor(
                 packageName = "system",
                 appName = "System",
                 protocol = "SYS",
-                localIp = "",
-                localPort = 0,
-                remoteIp = "",
-                remotePort = 0,
+                sourceIp = "",
+                sourcePort = 0,
+                destinationIp = "",
+                destinationPort = 0,
                 isSystemEvent = true,
                 systemEventReason = reason
             )

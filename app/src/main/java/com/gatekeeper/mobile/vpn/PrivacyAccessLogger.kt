@@ -12,6 +12,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import com.gatekeeper.mobile.data.db.entity.HardwareResourceType
+import com.gatekeeper.mobile.data.db.entity.AccessStatus
+import com.gatekeeper.mobile.data.db.entity.DetectionSource
+import com.gatekeeper.mobile.data.db.entity.ConfidenceLevel
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -39,7 +43,7 @@ class PrivacyAccessLogger @Inject constructor(
 
     /** Returns true if the user has granted Usage Access (PACKAGE_USAGE_STATS) via Settings. */
     fun hasUsageStatsPermission(): Boolean {
-        val mode = appOpsManager.checkOpNoThrow(
+        val mode = appOpsManager.unsafeCheckOpNoThrow(
             AppOpsManager.OPSTR_GET_USAGE_STATS,
             android.os.Process.myUid(),
             context.packageName
@@ -103,9 +107,9 @@ class PrivacyAccessLogger @Inject constructor(
                 if (usageSucceeded) return@launch
             }
 
-            // ── Stage 2: PackageManager permission scan (always works, no special permission) ─────
-            Log.i(TAG, "Falling back to PM permission scan (no Usage Access granted)")
-            runPermissionBasedScan()
+            // ── Stage 2: Fallback (No Usage Access granted) ─────
+            Log.i(TAG, "No Usage Access granted, cannot poll historical data without it.")
+            // Real logs will still be captured moving forward if AppOps is active for foreground/background via handleOpChange
         }
     }
 
@@ -173,7 +177,15 @@ class PrivacyAccessLogger @Inject constructor(
                     if (lastSeenTimestamps.containsKey(logKey)) continue
 
                     val durationMs = if (isResume) 5000L else 2000L  // estimate
-                    val logId = sensorLogRepository.logAccessStart(pkg, appName, sensorType, isBackground)
+                    val resourceType = mapSensorStringToResource(sensorType)
+                    val logId = sensorLogRepository.logAccessStart(
+                        pkg, appName, sensorType, isBackground,
+                        resourceType = resourceType,
+                        status = AccessStatus.ALLOWED,
+                        isAllowed = true,
+                        detectionSource = DetectionSource.PERMISSION_POLL,
+                        confidence = ConfidenceLevel.LOW
+                    )
                     sensorLogRepository.logAccessEnd(logId, durationMs)
                     lastSeenTimestamps[logKey] = timestamp
                     writtenAny = true
@@ -278,7 +290,15 @@ class PrivacyAccessLogger @Inject constructor(
                             ((entryClass.getMethod("getDuration").invoke(opEntry) as? Int) ?: 0).let { if (it > 0) it.toLong() else 1000L }
                         } catch (e: Exception) { 1000L }
 
-                        val logId = sensorLogRepository.logAccessStart(app.packageName, appName, sensorType, isBackground)
+                        val resourceType = mapSensorStringToResource(sensorType)
+                        val logId = sensorLogRepository.logAccessStart(
+                            app.packageName, appName, sensorType, isBackground,
+                            resourceType = resourceType,
+                            status = AccessStatus.ALLOWED,
+                            isAllowed = true,
+                            detectionSource = DetectionSource.APP_OPS,
+                            confidence = ConfidenceLevel.HIGH
+                        )
                         sensorLogRepository.logAccessEnd(logId, durationMs)
                         lastSeenTimestamps[sessionKey] = lastAccessTime
                         writtenAny = true
@@ -300,59 +320,6 @@ class PrivacyAccessLogger @Inject constructor(
         }
     }
 
-    /**
-     * Fallback: scans all installed apps for GRANTED dangerous permissions using PackageManager.
-     * Requires zero special permissions. Populates the database with "has access granted" entries
-     * so that the Hardware Access UI shows real apps from this device.
-     *
-     * Only writes entries that haven't already been seen (tracked via lastSeenTimestamps with
-     * a synthetic key using the permission string).
-     */
-    private suspend fun runPermissionBasedScan() {
-        try {
-            val packages = pm.getInstalledApplications(0)
-
-            // Map: dangerous permission → sensor type
-            val permToSensor = mapOf(
-                android.Manifest.permission.CAMERA to "CAMERA",
-                android.Manifest.permission.RECORD_AUDIO to "MICROPHONE",
-                android.Manifest.permission.ACCESS_FINE_LOCATION to "LOCATION",
-                android.Manifest.permission.ACCESS_COARSE_LOCATION to "LOCATION",
-                android.Manifest.permission.READ_CONTACTS to "CONTACTS",
-                android.Manifest.permission.READ_CALL_LOG to "CALL_LOG"
-            )
-
-            var count = 0
-            for (app in packages) {
-                // Skip system apps that are not interesting
-                val isSystemApp = (app.flags and android.content.pm.ApplicationInfo.FLAG_SYSTEM) != 0
-                if (isSystemApp && app.packageName.startsWith("com.android.") && !app.packageName.contains("chrome")) continue
-
-                val appName = try { pm.getApplicationLabel(app).toString() } catch (e: Exception) { app.packageName }
-
-                for ((permission, sensorType) in permToSensor) {
-                    val granted = pm.checkPermission(permission, app.packageName) == PackageManager.PERMISSION_GRANTED
-                    if (!granted) continue
-
-                    val sessionKey = "${app.packageName}|pm:$sensorType"
-                    if (lastSeenTimestamps.containsKey(sessionKey)) continue  // already inserted this session
-
-                    // Spread entries across last 24 hours for a realistic-looking timeline
-                    val hoursAgo = (1..20).random()
-                    val fakeTimestamp = System.currentTimeMillis() - (hoursAgo * 60L * 60L * 1000L)
-                    val fakeDuration = (30_000L..300_000L).random()  // 30s–5min
-
-                    val logId = sensorLogRepository.logAccessStart(app.packageName, appName, sensorType, isBackground = false)
-                    sensorLogRepository.logAccessEnd(logId, fakeDuration)
-                    lastSeenTimestamps[sessionKey] = fakeTimestamp
-                    count++
-                }
-            }
-            Log.i(TAG, "PM permission scan complete — inserted $count entries for ${packages.size} apps")
-        } catch (e: Exception) {
-            Log.e(TAG, "PM permission scan error", e)
-        }
-    }
 
     private fun String.toSensorType(): String? = when (this) {
         AppOpsManager.OPSTR_CAMERA -> "CAMERA"
@@ -361,6 +328,16 @@ class PrivacyAccessLogger @Inject constructor(
         AppOpsManager.OPSTR_READ_CONTACTS -> "CONTACTS"
         AppOpsManager.OPSTR_READ_CALL_LOG -> "CALL_LOG"
         else -> null
+    }
+
+    private fun mapSensorStringToResource(sensor: String): HardwareResourceType {
+        return when(sensor) {
+            "CAMERA" -> HardwareResourceType.CAMERA
+            "MICROPHONE" -> HardwareResourceType.MICROPHONE
+            "LOCATION" -> HardwareResourceType.LOCATION
+            "CONTACTS", "CALL_LOG" -> HardwareResourceType.SENSOR
+            else -> HardwareResourceType.SENSOR
+        }
     }
 
 
@@ -385,7 +362,15 @@ class PrivacyAccessLogger @Inject constructor(
             val processInfo = am.runningAppProcesses?.find { it.processName == packageName }
             val isBackground = processInfo?.importance != android.app.ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
 
-            val logId = sensorLogRepository.logAccessStart(packageName, appName, sensorType, isBackground)
+            val resourceType = mapSensorStringToResource(sensorType)
+            val logId = sensorLogRepository.logAccessStart(
+                packageName, appName, sensorType, isBackground,
+                resourceType = resourceType,
+                status = AccessStatus.ALLOWED,
+                isAllowed = true,
+                detectionSource = DetectionSource.APP_OPS,
+                confidence = ConfidenceLevel.HIGH
+            )
             activeSessions[sessionKey] = Pair(logId, System.currentTimeMillis())
             Log.d(TAG, "Access started: $appName -> $sensorType")
 

@@ -4,6 +4,10 @@ import com.gatekeeper.mobile.data.db.dao.AppSensorUsage
 import com.gatekeeper.mobile.data.db.dao.SensorSummary
 import com.gatekeeper.mobile.data.db.dao.SensorLogDao
 import com.gatekeeper.mobile.data.db.entity.SensorLog
+import com.gatekeeper.mobile.data.db.entity.HardwareResourceType
+import com.gatekeeper.mobile.data.db.entity.AccessStatus
+import com.gatekeeper.mobile.data.db.entity.DetectionSource
+import com.gatekeeper.mobile.data.db.entity.ConfidenceLevel
 import kotlinx.coroutines.flow.Flow
 import java.util.Calendar
 import javax.inject.Inject
@@ -13,7 +17,9 @@ import javax.inject.Singleton
 class SensorLogRepository @Inject constructor(
     private val dao: SensorLogDao
 ) {
-    fun observeRecent(): Flow<List<SensorLog>> = dao.observeRecent()
+    fun observeRecent(): Flow<List<SensorLog>> =
+        dao.observeRecent(sinceMs = System.currentTimeMillis() - 24 * 60 * 60 * 1000L)
+
 
     /** Today's sensor summary (Camera/Mic access counts and durations since midnight) */
     fun observeTodaySummary(): Flow<List<SensorSummary>> = dao.observeTodaySummary(todayMidnightMs())
@@ -30,11 +36,26 @@ class SensorLogRepository @Inject constructor(
         }.timeInMillis
     }
 
-    suspend fun logAccessStart(packageName: String, appName: String, sensorType: String, isBackground: Boolean): Long {
+    suspend fun logAccessStart(
+        packageName: String, 
+        appName: String, 
+        sensorType: String, 
+        isBackground: Boolean,
+        resourceType: HardwareResourceType = HardwareResourceType.SENSOR,
+        status: AccessStatus = AccessStatus.ALLOWED,
+        isAllowed: Boolean = true,
+        detectionSource: DetectionSource = DetectionSource.INFERRED,
+        confidence: ConfidenceLevel = ConfidenceLevel.LOW
+    ): Long {
         val log = SensorLog(
             packageName = packageName,
             appName = appName,
             sensorType = sensorType,
+            resourceType = resourceType,
+            status = status,
+            isAllowed = isAllowed,
+            detectionSource = detectionSource,
+            confidence = confidence,
             isBackground = isBackground
         )
         return dao.insert(log)

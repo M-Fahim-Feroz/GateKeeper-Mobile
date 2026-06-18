@@ -7,6 +7,7 @@ import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -25,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
 import com.gatekeeper.mobile.receiver.GateKeeperDeviceAdminReceiver
+import com.gatekeeper.mobile.ui.components.SettingsDivider
+import com.gatekeeper.mobile.ui.components.SettingsItem
+import com.gatekeeper.mobile.ui.components.SettingsSwitch
 import com.gatekeeper.mobile.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -102,6 +106,61 @@ fun SettingsPrivacyScreen(
     val isImsiDetectionEnabled by viewModel.isImsiDetectionEnabled.collectAsState()
     val isEvilTwinDetectionEnabled by viewModel.isEvilTwinDetectionEnabled.collectAsState()
 
+    val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val granted = permissions.entries.all { it.value }
+        if (granted) {
+            viewModel.setImsiDetection(true)
+        } else {
+            Toast.makeText(context, "Permissions required for IMSI detection", Toast.LENGTH_SHORT).show()
+            viewModel.setImsiDetection(false)
+        }
+    }
+
+    val usageStatsLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()
+    ) {
+        val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+        val mode = appOpsManager.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+        if (mode == android.app.AppOpsManager.MODE_ALLOWED) {
+            viewModel.setBackgroundSensorAlerts(true)
+        } else {
+            viewModel.setBackgroundSensorAlerts(false)
+        }
+    }
+
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                // Background Sensor Alerts check
+                if (isBackgroundSensorAlertsEnabled) {
+                    val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+                    val mode = appOpsManager.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+                    if (mode != android.app.AppOpsManager.MODE_ALLOWED) {
+                        viewModel.setBackgroundSensorAlerts(false)
+                    }
+                }
+                // IMSI check
+                if (isImsiDetectionEnabled) {
+                    val fineLoc = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    val phoneState = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                    if (!fineLoc || !phoneState) {
+                        viewModel.setImsiDetection(false)
+                    }
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val imsiSupported = remember {
+        context.packageManager.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TELEPHONY) &&
+        context.getSystemService(android.telephony.TelephonyManager::class.java) != null
+    }
+
     SettingsSubPage(title = "Privacy", subtitle = "Sensor access, camera & threat detection", navController = navController) {
         SettingsCard {
             SettingsSwitch(
@@ -113,13 +172,29 @@ fun SettingsPrivacyScreen(
                 onCheckedChange = { viewModel.setDnsExfilDetection(it) }
             )
             SettingsDivider()
+            
             SettingsSwitch(
                 icon = Icons.Filled.Mic,
                 title = "Background camera & mic alerts",
                 subtitle = "Notifies you when apps access your camera or mic while running in background",
                 tint = LocalGKColors.current.accentOrange,
                 checked = isBackgroundSensorAlertsEnabled,
-                onCheckedChange = { viewModel.setBackgroundSensorAlerts(it) }
+                onCheckedChange = { isChecked ->
+                    if (isChecked) {
+                        viewModel.setBackgroundSensorAlerts(true)
+                        val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as android.app.AppOpsManager
+                        val mode = appOpsManager.unsafeCheckOpNoThrow(android.app.AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), context.packageName)
+                        if (mode == android.app.AppOpsManager.MODE_ALLOWED) {
+                            Toast.makeText(context, "Background monitoring started", Toast.LENGTH_SHORT).show()
+                        } else {
+                            Toast.makeText(context, "Usage Access required", Toast.LENGTH_SHORT).show()
+                            val intent = Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS)
+                            usageStatsLauncher.launch(intent)
+                        }
+                    } else {
+                        viewModel.setBackgroundSensorAlerts(false)
+                    }
+                }
             )
             SettingsDivider()
             SettingsSwitch(
@@ -182,8 +257,32 @@ fun SettingsPrivacyScreen(
                 subtitle = "Warns you if a fake cell tower is trying to intercept your calls",
                 tint = LocalGKColors.current.accentRed,
                 checked = isImsiDetectionEnabled,
-                onCheckedChange = { viewModel.setImsiDetection(it) }
+                onCheckedChange = { isChecked ->
+                    if (!imsiSupported) {
+                        Toast.makeText(context, "Telephony features missing, but enabling for demo", Toast.LENGTH_SHORT).show()
+                    }
+                    if (isChecked) {
+                        viewModel.setImsiDetection(true)
+                        val fineLoc = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        val phoneState = androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.READ_PHONE_STATE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        if (fineLoc && phoneState) {
+                            Toast.makeText(context, "IMSI detection active", Toast.LENGTH_SHORT).show()
+                        } else {
+                            permissionLauncher.launch(arrayOf(android.Manifest.permission.ACCESS_FINE_LOCATION, android.Manifest.permission.READ_PHONE_STATE))
+                        }
+                    } else {
+                        viewModel.setImsiDetection(false)
+                    }
+                }
             )
+            AnimatedVisibility(visible = !imsiSupported) {
+                Text(
+                    "IMSI detection is not supported on this device or Android version.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = LocalGKColors.current.textSecondary,
+                    modifier = Modifier.padding(start = 16.dp, top = 4.dp, bottom = 12.dp)
+                )
+            }
             SettingsDivider()
             SettingsSwitch(
                 icon = Icons.Filled.Wifi,
@@ -214,7 +313,7 @@ fun SettingsAdvancedScreen(
     val ipv4Regex = Regex("""^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.){3}(25[0-5]|(2[0-4]|1\d|[1-9]|)\d)$""")
     val isIpValid = ipv4Regex.matches(tempIp.trim())
 
-    SettingsSubPage(title = "Advanced", subtitle = "PCAP, exports, and desktop sync", navController = navController) {
+    SettingsSubPage(title = "Advanced", subtitle = "PCAP and exports", navController = navController) {
         SettingsCard {
             SettingsSwitch(
                 icon = Icons.Filled.Policy,
@@ -274,63 +373,7 @@ fun SettingsAdvancedScreen(
                     }
                 }
             )
-            SettingsDivider()
-            SettingsItem(
-                icon = Icons.Filled.Computer,
-                title = "Backend IP Address",
-                subtitle = backendIp.ifEmpty { "Not configured — tap to set" },
-                tint = LocalGKColors.current.primary,
-                onClick = { tempIp = backendIp; showIpDialog = true }
-            )
         }
-    }
-
-    if (showIpDialog) {
-        AlertDialog(
-            onDismissRequest = { showIpDialog = false },
-            containerColor = LocalGKColors.current.surfaceVariant,
-            title = { Text("Configure Backend IP", color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold) },
-            text = {
-                Column {
-                    Text(
-                        "Enter the IPv4 address of your PC running GateKeeper Desktop (e.g. 192.168.1.100).",
-                        color = LocalGKColors.current.textSecondary,
-                        style = MaterialTheme.typography.bodySmall
-                    )
-                    Spacer(Modifier.height(16.dp))
-                    OutlinedTextField(
-                        value = tempIp,
-                        onValueChange = { tempIp = it },
-                        label = { Text("IP Address", color = LocalGKColors.current.textTertiary) },
-                        singleLine = true,
-                        isError = tempIp.isNotEmpty() && !isIpValid,
-                        supportingText = {
-                            if (tempIp.isNotEmpty() && !isIpValid)
-                                Text("Enter a valid IPv4 address (e.g. 192.168.1.100)", color = LocalGKColors.current.accentRed)
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = if (tempIp.isNotEmpty() && !isIpValid) LocalGKColors.current.accentRed else LocalGKColors.current.primary,
-                            unfocusedBorderColor = if (tempIp.isNotEmpty() && !isIpValid) LocalGKColors.current.accentRed else LocalGKColors.current.border,
-                            focusedTextColor = LocalGKColors.current.textPrimary,
-                            unfocusedTextColor = LocalGKColors.current.textPrimary
-                        )
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.setBackendIp(tempIp.trim()); showIpDialog = false },
-                    enabled = isIpValid
-                ) {
-                    Text("Save", color = if (isIpValid) LocalGKColors.current.primary else LocalGKColors.current.textTertiary, fontWeight = FontWeight.Bold)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showIpDialog = false }) {
-                    Text("Cancel", color = LocalGKColors.current.textSecondary)
-                }
-            }
-        )
     }
 }
 
@@ -420,7 +463,7 @@ fun SettingsSubPage(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(LocalGKColors.current.background)
+            .glassAmbientBackground()
             .verticalScroll(rememberScrollState())
     ) {
         Column(
@@ -429,8 +472,18 @@ fun SettingsSubPage(
                 .background(Brush.verticalGradient(listOf(LocalGKColors.current.textTertiary.copy(alpha = 0.06f), LocalGKColors.current.background)))
                 .padding(horizontal = 20.dp, vertical = 16.dp)
         ) {
-            IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Filled.ArrowBack, "Back", tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(20.dp))
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(20.dp))
+                    .glassCard()
+                    .clickable { navController.popBackStack() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.ArrowBack, "Back", tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Back", style = MaterialTheme.typography.labelMedium, color = LocalGKColors.current.textSecondary)
+                }
             }
             Spacer(Modifier.height(4.dp))
             Text(title, style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)

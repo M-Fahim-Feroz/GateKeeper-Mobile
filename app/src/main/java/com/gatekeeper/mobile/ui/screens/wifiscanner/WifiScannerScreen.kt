@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -40,6 +41,8 @@ fun WifiScannerScreen(
     val knownNetworks by viewModel.knownNetworks.collectAsState(initial = emptyList())
     val context = LocalContext.current
     var showPermissionDeniedDialog by remember { mutableStateOf(false) }
+    var showLocationDisabledDialog by remember { mutableStateOf(false) }
+    var showInfoDialog by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -52,44 +55,52 @@ fun WifiScannerScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize().background(LocalGKColors.current.background)) {
-        // Header
-        Column(
+        // TopAppBar
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Brush.verticalGradient(listOf(LocalGKColors.current.primary.copy(alpha = 0.08f), LocalGKColors.current.background)))
-                .padding(horizontal = 20.dp, vertical = 20.dp)
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            if (navController != null) {
-                IconButton(onClick = { navController.popBackStack() }, modifier = Modifier.size(36.dp)) {
-                    Icon(Icons.Filled.ArrowBack, "Back", tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(20.dp))
-                }
-                Spacer(Modifier.height(4.dp))
+            IconButton(onClick = { navController?.popBackStack() }) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = ModuleWifiGuard)
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp))
-                        .background(Brush.linearGradient(GradientTeal.map { it.copy(alpha = 0.2f) })),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Filled.WifiTethering, null, tint = LocalGKColors.current.accentTeal, modifier = Modifier.size(22.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column {
-                    Text("Wi-Fi Scanner", style = MaterialTheme.typography.displaySmall, color = LocalGKColors.current.textPrimary)
-                    Text("Analyze local network security", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
-                }
-            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("GateKeeper", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = ModuleWifiGuard)
+        }
 
-            Spacer(Modifier.height(16.dp))
-            
+        Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Wi-Fi Guard", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = LocalGKColors.current.textPrimary)
+                GKInfoButton(color = ModuleWifiGuard) { showInfoDialog = true }
+            }
+            Text("Analyze local network security.", style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textSecondary, modifier = Modifier.padding(top = 4.dp))
+            Spacer(modifier = Modifier.height(24.dp))
             Button(
                 onClick = { 
-                    val hasPermission = ContextCompat.checkSelfPermission(
+                    val locationManager = context.getSystemService(android.content.Context.LOCATION_SERVICE) as android.location.LocationManager
+                    val isLocationOn = androidx.core.location.LocationManagerCompat.isLocationEnabled(locationManager)
+                    
+                    if (!isLocationOn) {
+                        showLocationDisabledDialog = true
+                        return@Button
+                    }
+
+                    val hasLocationPerm = ContextCompat.checkSelfPermission(
                         context,
                         Manifest.permission.ACCESS_FINE_LOCATION
                     ) == PackageManager.PERMISSION_GRANTED
                     
-                    if (hasPermission) {
+                    val hasNearbyWifiPerm = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED
+                    } else true
+                    
+                    if (hasLocationPerm && hasNearbyWifiPerm) {
                         viewModel.scanWifi()
                     } else {
                         permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
@@ -148,12 +159,55 @@ fun WifiScannerScreen(
             onDismissRequest = { showPermissionDeniedDialog = false },
             containerColor = LocalGKColors.current.card,
             title = { Text("Location Required", color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold) },
-            text = { Text("Android explicitly requires Location Permissions for apps to scan Wi-Fi networks in order to evaluate their encryption security.", color = LocalGKColors.current.textSecondary) },
+            text = { Text("Android explicitly requires Location Permissions for apps to scan Wi-Fi networks in order to evaluate their encryption security. Please grant the permission in settings.", color = LocalGKColors.current.textSecondary) },
             confirmButton = {
+                TextButton(onClick = { 
+                    showPermissionDeniedDialog = false
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = android.net.Uri.fromParts("package", context.packageName, null)
+                    }
+                    context.startActivity(intent)
+                }) {
+                    Text("Open Settings", color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
                 TextButton(onClick = { showPermissionDeniedDialog = false }) {
-                    Text("Understood", color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
+                    Text("Cancel", color = LocalGKColors.current.textSecondary)
                 }
             }
+        )
+    }
+
+    if (showLocationDisabledDialog) {
+        AlertDialog(
+            onDismissRequest = { showLocationDisabledDialog = false },
+            containerColor = LocalGKColors.current.card,
+            title = { Text("Location Services Disabled", color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Wi-Fi scanning requires device Location Services to be turned on. Please enable Location Services in your system settings.", color = LocalGKColors.current.textSecondary) },
+            confirmButton = {
+                TextButton(onClick = { 
+                    showLocationDisabledDialog = false
+                    val intent = android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+                    context.startActivity(intent)
+                }) {
+                    Text("Enable Location", color = LocalGKColors.current.primary, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLocationDisabledDialog = false }) {
+                    Text("Cancel", color = LocalGKColors.current.textSecondary)
+                }
+            }
+        )
+    }
+
+    if (showInfoDialog) {
+        GKInfoDialog(
+            title = "Wi-Fi Guard",
+            body = "Wi-Fi Guard scans nearby wireless networks and checks them for security threats.\n\nIt can detect:\n\u2022 Evil Twin attacks \u2014 fake hotspots that copy a real network name to steal your data\n\u2022 Open networks \u2014 connections with no password or encryption\n\u2022 Suspicious signals \u2014 unusually strong signals from unknown access points\n\nAlways verify unfamiliar networks before connecting, especially in public places like cafes or airports.",
+            accentColor = ModuleWifiGuard,
+            onDismiss = { showInfoDialog = false }
         )
     }
 }
@@ -229,6 +283,8 @@ fun DeviceItem(result: WifiNetworkInfo) {
                     Text(
                         buildString {
                             append(result.bssid)
+                            append(" · ${result.frequency} MHz")
+                            append(" · ${result.signalStrength} dBm")
                             if (result.vendorName != null) append(" · ${result.vendorName}")
                         },
                         style = MaterialTheme.typography.bodySmall,

@@ -23,7 +23,9 @@ class ThreatFeedManager @Inject constructor(
      */
     suspend fun importFromUrl(url: String, name: String, type: String, threatType: String): Result<Int> = withContext(Dispatchers.IO) {
         try {
-            Log.i(TAG, "Downloading feed from \$url")
+            Log.i(TAG, "Downloading feed from $url")
+            // Purge existing entries for this feed first to prevent DB bloat on re-import
+            repository.removeFeed(url)
             val connection = URL(url).openConnection() as HttpURLConnection
             connection.requestMethod = "GET"
             connection.connectTimeout = 10000

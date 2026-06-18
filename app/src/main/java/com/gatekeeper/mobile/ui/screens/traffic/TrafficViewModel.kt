@@ -60,4 +60,72 @@ class TrafficViewModel @Inject constructor(
             }
         }
     }
+
+    fun exportCsv(context: android.content.Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val logs = trafficRepository.observeRecent(1000).first()
+                val fileName = "GateKeeper_Traffic_${System.currentTimeMillis()}.csv"
+                val writeAction: (java.io.BufferedWriter) -> Unit = { writer ->
+                    fun csvQuote(s: String?) = "\"${s?.replace("\"", "\"\"") ?: ""}\""
+                    writer.write("Timestamp,App,Protocol,Source IP,Dest IP,Dest Port,Bytes In,Bytes Out,Blocked,Reason\n")
+                    logs.forEach {
+                        writer.write("${it.timestamp},${csvQuote(it.appName)},${csvQuote(it.protocol)},${csvQuote(it.sourceIp)},${csvQuote(it.destinationIp)},${it.destinationPort},${it.bytesReceived},${it.bytesSent},${it.wasBlocked},${csvQuote(it.systemEventReason)}\n")
+                    }
+                }
+                
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    val resolver = context.contentResolver
+                    val contentValues = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "text/csv")
+                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                    }
+                    val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                    uri?.let { resolver.openOutputStream(it)?.bufferedWriter()?.use(writeAction) }
+                } else {
+                    val file = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), fileName)
+                    file.bufferedWriter().use(writeAction)
+                }
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Exported CSV to Downloads: $fileName", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "CSV Export failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun exportPcap(context: android.content.Context) {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val fileName = "GateKeeper_Traffic_${System.currentTimeMillis()}.pcap"
+                val pcapHeader = byteArrayOf(0xd4.toByte(), 0xc3.toByte(), 0xb2.toByte(), 0xa1.toByte(), 0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff.toByte(), 0xff.toByte(), 0x00, 0x00, 0x01, 0x00, 0x00, 0x00)
+                
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    val resolver = context.contentResolver
+                    val contentValues = android.content.ContentValues().apply {
+                        put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                        put(android.provider.MediaStore.MediaColumns.MIME_TYPE, "application/vnd.tcpdump.pcap")
+                        put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.os.Environment.DIRECTORY_DOWNLOADS)
+                    }
+                    val uri = resolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+                    uri?.let { resolver.openOutputStream(it)?.use { out -> out.write(pcapHeader) } }
+                } else {
+                    val file = java.io.File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), fileName)
+                    file.writeBytes(pcapHeader)
+                }
+                
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "Saved empty PCAP to Downloads. Raw packets require root.", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } catch (e: Exception) {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "PCAP Export failed: ${e.message}", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
 }

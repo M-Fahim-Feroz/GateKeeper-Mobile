@@ -3,7 +3,12 @@ package com.gatekeeper.mobile.domain.usecase
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.app.AppOpsManager
+import android.os.Build
 import com.gatekeeper.mobile.domain.model.AppPermissionInfo
+import com.gatekeeper.mobile.domain.model.DetailedPermission
+import com.gatekeeper.mobile.domain.model.EffectivePermissionStatus
+import com.gatekeeper.mobile.domain.model.PermissionSource
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -40,36 +45,81 @@ class ScanAppPermissionsUseCase @Inject constructor(
         "android.permission.BODY_SENSORS"
     )
 
+    private val SPECIAL_PERMS = setOf(
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.PACKAGE_USAGE_STATS",
+        "android.permission.MANAGE_EXTERNAL_STORAGE",
+        "android.permission.REQUEST_INSTALL_PACKAGES",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.BIND_ACCESSIBILITY_SERVICE",
+        "android.permission.BIND_NOTIFICATION_LISTENER_SERVICE",
+        "android.permission.BIND_VPN_SERVICE",
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+    )
+
+    private fun checkPermissionStatus(packageName: String, permission: String, uid: Int): EffectivePermissionStatus {
+        val pmStatus = context.packageManager.checkPermission(permission, packageName)
+        if (pmStatus != PackageManager.PERMISSION_GRANTED) return EffectivePermissionStatus.DENIED
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val op = AppOpsManager.permissionToOp(permission)
+            if (op != null) {
+                val appOpsManager = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+                val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    appOpsManager.unsafeCheckOpNoThrow(op, uid, packageName)
+                } else {
+                    appOpsManager.checkOpNoThrow(op, uid, packageName)
+                }
+                return when (mode) {
+                    AppOpsManager.MODE_ALLOWED -> EffectivePermissionStatus.GRANTED
+                    AppOpsManager.MODE_IGNORED -> EffectivePermissionStatus.DENIED
+                    AppOpsManager.MODE_ERRORED -> EffectivePermissionStatus.DENIED
+                    AppOpsManager.MODE_FOREGROUND -> EffectivePermissionStatus.FOREGROUND_ONLY
+                    else -> EffectivePermissionStatus.UNKNOWN
+                }
+            }
+        }
+        return EffectivePermissionStatus.GRANTED
+    }
+
     operator fun invoke(): List<AppPermissionInfo> {
         val pm = context.packageManager
         val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
 
-        return apps
-            .filter { app ->
-                val isSystemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                val isUpdatedSystemApp = (app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-                val hasLauncher = pm.getLaunchIntentForPackage(app.packageName) != null
-                
-                !isSystemApp || isUpdatedSystemApp || hasLauncher
-            }
-            .mapNotNull { appInfo ->
+        return apps.mapNotNull { appInfo ->
             try {
                 val packageInfo = pm.getPackageInfo(
                     appInfo.packageName,
                     PackageManager.GET_PERMISSIONS
                 )
                 val permissions = packageInfo.requestedPermissions?.toList() ?: emptyList()
+                val flags = packageInfo.requestedPermissionsFlags ?: IntArray(permissions.size)
+                
+                val detailedPermissions = permissions.mapIndexed { idx, perm ->
+                    val isDangerous = perm in dangerousPermissions
+                    val source = if ((flags.getOrNull(idx) ?: 0) and android.content.pm.PackageInfo.REQUESTED_PERMISSION_GRANTED != 0) {
+                        PermissionSource.RUNTIME_GRANTED
+                    } else {
+                        PermissionSource.MANIFEST_DECLARED
+                    }
+                    val effectiveStatus = checkPermissionStatus(appInfo.packageName, perm, appInfo.uid)
+                    DetailedPermission(perm, effectiveStatus, source, isDangerous)
+                }
+                
                 val dangerous = permissions.filter { it in dangerousPermissions }
-                val riskScore = calculateRiskScore(permissions, dangerous)
+                val riskScore = calculateRiskScore(detailedPermissions)
+                val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
 
                 AppPermissionInfo(
                     packageName = appInfo.packageName,
                     appName = pm.getApplicationLabel(appInfo).toString(),
                     permissions = permissions,
+                    detailedPermissions = detailedPermissions,
                     riskScore = riskScore,
-                    riskTier = computeRiskTier(permissions),
+                    riskTier = computeRiskTier(detailedPermissions),
                     dangerousPermissions = dangerous,
-                    icon = try { pm.getApplicationIcon(appInfo) } catch (_: Exception) { null }
+                    icon = try { pm.getApplicationIcon(appInfo) } catch (_: Exception) { null },
+                    isSystemApp = isSystemApp
                 )
             } catch (_: Exception) {
                 null
@@ -80,12 +130,6 @@ class ScanAppPermissionsUseCase @Inject constructor(
     suspend fun invokeProgressive(onProgress: (scanned: Int, total: Int, results: List<AppPermissionInfo>) -> Unit) {
         val pm = context.packageManager
         val apps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-            .filter { app ->
-                val isSystemApp = (app.flags and ApplicationInfo.FLAG_SYSTEM) != 0
-                val isUpdatedSystemApp = (app.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
-                val hasLauncher = pm.getLaunchIntentForPackage(app.packageName) != null
-                !isSystemApp || isUpdatedSystemApp || hasLauncher
-            }
 
         val total = apps.size
         val results = mutableListOf<AppPermissionInfo>()
@@ -95,49 +139,74 @@ class ScanAppPermissionsUseCase @Inject constructor(
                 try {
                     val packageInfo = pm.getPackageInfo(appInfo.packageName, PackageManager.GET_PERMISSIONS)
                     val permissions = packageInfo.requestedPermissions?.toList() ?: emptyList()
-                    val dangerous = permissions.filter { it in dangerousPermissions }
-                    val riskScore = calculateRiskScore(permissions, dangerous)
+                    val flags = packageInfo.requestedPermissionsFlags ?: IntArray(permissions.size)
+                    
+                    val detailedPermissions = permissions.mapIndexed { idx, perm ->
+                        val isDangerous = perm in dangerousPermissions
+                        val source = if ((flags.getOrNull(idx) ?: 0) and android.content.pm.PackageInfo.REQUESTED_PERMISSION_GRANTED != 0) {
+                            PermissionSource.RUNTIME_GRANTED
+                        } else {
+                            PermissionSource.MANIFEST_DECLARED
+                        }
+                        val effectiveStatus = checkPermissionStatus(appInfo.packageName, perm, appInfo.uid)
+                        DetailedPermission(perm, effectiveStatus, source, isDangerous)
+                    }
 
-                    val info = AppPermissionInfo(
+                    val dangerous = permissions.filter { it in dangerousPermissions }
+                    val riskScore = calculateRiskScore(detailedPermissions)
+                    val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+
+                    val result = AppPermissionInfo(
                         packageName = appInfo.packageName,
                         appName = pm.getApplicationLabel(appInfo).toString(),
                         permissions = permissions,
+                        detailedPermissions = detailedPermissions,
                         riskScore = riskScore,
-                        riskTier = computeRiskTier(permissions),
+                        riskTier = computeRiskTier(detailedPermissions),
                         dangerousPermissions = dangerous,
-                        icon = try { pm.getApplicationIcon(appInfo) } catch (_: Exception) { null }
+                        icon = try { pm.getApplicationIcon(appInfo) } catch (_: Exception) { null },
+                        isSystemApp = isSystemApp
                     )
-                    results.add(info)
+                    results.add(result)
                 } catch (_: Exception) {}
                 
-                // Sort incrementally so UI is sorted
-                onProgress(index + 1, total, results.sortedByDescending { it.riskScore })
+                if (index % 5 == 0 || index == total - 1) {
+                    onProgress(index + 1, total, results.sortedByDescending { it.riskScore })
+                }
             }
         }
     }
 
-    private fun calculateRiskScore(all: List<String>, dangerous: List<String>): Int {
+    private fun calculateRiskScore(detailedPermissions: List<DetailedPermission>): Int {
         var score = 0
-        score += dangerous.size * 12  // Each dangerous permission adds 12 points
-        if ("android.permission.INTERNET" in all) score += 5
-        // Camera + Internet combo
-        if ("android.permission.CAMERA" in all && "android.permission.INTERNET" in all) score += 10
-        // Location + Internet combo
-        if ("android.permission.ACCESS_FINE_LOCATION" in all && "android.permission.INTERNET" in all) score += 8
-        // SMS + Internet combo
-        if ("android.permission.READ_SMS" in all && "android.permission.INTERNET" in all) score += 15
-        // Contacts + Internet combo
-        if ("android.permission.READ_CONTACTS" in all && "android.permission.INTERNET" in all) score += 10
+        
+        val grantedDangerous = detailedPermissions.filter { it.isDangerous && (it.effectiveStatus == EffectivePermissionStatus.GRANTED || it.effectiveStatus == EffectivePermissionStatus.FOREGROUND_ONLY) }
+        val grantedSpecial = detailedPermissions.filter { it.permissionName in SPECIAL_PERMS && (it.effectiveStatus == EffectivePermissionStatus.GRANTED || it.effectiveStatus == EffectivePermissionStatus.FOREGROUND_ONLY) }
+        
+        score += grantedDangerous.size * 12
+        score += grantedSpecial.size * 15 // Special access is highly risky
+
+        val allGranted = detailedPermissions.filter { it.effectiveStatus == EffectivePermissionStatus.GRANTED || it.effectiveStatus == EffectivePermissionStatus.FOREGROUND_ONLY }.map { it.permissionName }
+        
+        if ("android.permission.INTERNET" in allGranted) score += 5
+        if ("android.permission.CAMERA" in allGranted && "android.permission.INTERNET" in allGranted) score += 10
+        if ("android.permission.ACCESS_FINE_LOCATION" in allGranted && "android.permission.INTERNET" in allGranted) score += 8
+        if ("android.permission.READ_SMS" in allGranted && "android.permission.INTERNET" in allGranted) score += 15
+        if ("android.permission.READ_CONTACTS" in allGranted && "android.permission.INTERNET" in allGranted) score += 10
+        
         return score.coerceAtMost(100)
     }
 
-    private fun computeRiskTier(permissions: List<String>): String {
-        val survCount = permissions.count { it in SURVEILLANCE_PERMS }
+    private fun computeRiskTier(detailedPermissions: List<DetailedPermission>): String {
+        val granted = detailedPermissions.filter { it.effectiveStatus == EffectivePermissionStatus.GRANTED || it.effectiveStatus == EffectivePermissionStatus.FOREGROUND_ONLY }.map { it.permissionName }
+        val survCount = granted.count { it in SURVEILLANCE_PERMS }
+        val specialCount = granted.count { it in SPECIAL_PERMS }
+        
         return when {
-            survCount >= 4                          -> "CRITICAL"
-            survCount >= 2                          -> "HIGH"
-            permissions.any { it in DATA_PERMS }   -> "MEDIUM"
-            else                                   -> "LOW"
+            survCount >= 4 || specialCount >= 2 -> "CRITICAL"
+            survCount >= 2 || specialCount >= 1 -> "HIGH"
+            granted.any { it in DATA_PERMS }   -> "MEDIUM"
+            else                               -> "LOW"
         }
     }
 }

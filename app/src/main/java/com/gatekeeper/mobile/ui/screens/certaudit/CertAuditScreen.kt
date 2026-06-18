@@ -1,319 +1,310 @@
 package com.gatekeeper.mobile.ui.screens.certaudit
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material.icons.automirrored.filled.ArrowRight
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import com.gatekeeper.mobile.ui.components.SectionHeader
-import com.gatekeeper.mobile.ui.components.ShimmerList
-import com.gatekeeper.mobile.ui.components.GKBadge
-import com.gatekeeper.mobile.ui.components.BadgeStyle
+import com.gatekeeper.mobile.ui.components.GKInfoButton
+import com.gatekeeper.mobile.ui.components.GKInfoDialog
 import com.gatekeeper.mobile.ui.theme.*
-import com.gatekeeper.mobile.vpn.RogueCertInfo
-import com.gatekeeper.mobile.vpn.VulnerableAppInfo
-import kotlinx.coroutines.launch
+import com.gatekeeper.mobile.vpn.CertificateInfo
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CertAuditScreen(
-    navController: NavController,
+    navController: NavController? = null,
     viewModel: CertAuditViewModel = hiltViewModel()
 ) {
-    val isLoading by viewModel.isLoading.collectAsState()
-    val systemCerts by viewModel.systemCerts.collectAsState()
     val userCerts by viewModel.userCerts.collectAsState()
+    val systemCerts by viewModel.systemCerts.collectAsState()
     val vulnerableApps by viewModel.vulnerableApps.collectAsState()
-    val lastScanTime by viewModel.lastScanTime.collectAsState()
 
-    val tabs = listOf("User (${userCerts.size})", "System (${systemCerts.size})")
-    
-    val pagerState = rememberPagerState(pageCount = { tabs.size })
-    val coroutineScope = rememberCoroutineScope()
-
-    // Always rescan when screen opens so data is fresh
     LaunchedEffect(Unit) { viewModel.rescan() }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Certificate Auditor", color = LocalGKColors.current.textPrimary) },
-                navigationIcon = {
-                    IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = LocalGKColors.current.textPrimary)
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { viewModel.injectDemoData() }) {
-                        Icon(Icons.Default.Add, contentDescription = "Inject Demo Data", tint = LocalGKColors.current.textPrimary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = LocalGKColors.current.background)
-            )
-        },
-        containerColor = LocalGKColors.current.background
-    ) { padding ->
-        Column(
+    var selectedCert by remember { mutableStateOf<CertificateInfo?>(null) }
+    var showInfoDialog by remember { mutableStateOf(false) }
+
+    val trustScore = 100 - (userCerts.size * 10) - (vulnerableApps.size * 5)
+    val scoreClamped = trustScore.coerceIn(0, 100)
+    val isPerfect = scoreClamped == 100
+
+    val primaryColor = Color(0xFF00D4FF)
+    val themeColor = if (isPerfect) Color(0xFF37DF66) else Color(0xFFF44336)
+    
+    val bgColor = Color(0xFF05070A)
+    val surfaceColor = Color(0xFF10141A)
+
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f, targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(animation = tween(1000, easing = LinearOutSlowInEasing), repeatMode = RepeatMode.Reverse), label = "scale"
+    )
+
+    Column(modifier = Modifier.fillMaxSize().background(bgColor)) {
+        // TopAppBar
+        Row(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
+                .fillMaxWidth()
+                .background(bgColor.copy(alpha = 0.8f))
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Hero
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Brush.verticalGradient(listOf(LocalGKColors.current.accentOrange.copy(alpha = 0.1f), LocalGKColors.current.background)))
-                    .padding(20.dp)
-            ) {
-                Column {
-                    Text(
-                        "SSL Trust Store",
-                        style = MaterialTheme.typography.displaySmall,
-                        color = LocalGKColors.current.textPrimary
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    GKBadge("INCLUDES DEMO CA", BadgeStyle.MEDIUM)
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "GateKeeper scans your device for Root Certificate Authorities. User CAs can be used to perform Man-in-the-Middle (MITM) attacks and decrypt your HTTPS traffic.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = LocalGKColors.current.textSecondary
-                    )
-                }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = primaryColor, modifier = Modifier.size(24.dp).clickable { navController?.popBackStack() })
+                Spacer(Modifier.width(16.dp))
+                Text("Trust Check", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = primaryColor)
             }
+            GKInfoButton(color = primaryColor) { showInfoDialog = true }
+        }
 
-            if (isLoading) {
-                ShimmerList(count = 5)
-            } else {
-                TabRow(
-                    selectedTabIndex = pagerState.currentPage,
-                    containerColor = LocalGKColors.current.background,
-                    contentColor = LocalGKColors.current.primary
+        // Tabs
+        var selectedTabIndex by remember { mutableStateOf(0) }
+        val tabs = listOf("User Installed", "System Installed")
+
+        TabRow(
+            selectedTabIndex = selectedTabIndex,
+            containerColor = bgColor,
+            contentColor = primaryColor
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTabIndex == index,
+                    onClick = { selectedTabIndex = index },
+                    text = { Text(title, fontWeight = FontWeight.Bold, color = if (selectedTabIndex == index) primaryColor else LocalGKColors.current.textSecondary) }
+                )
+            }
+        }
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 100.dp)
+        ) {
+            // Score Header Section
+            item {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp)
                 ) {
-                    tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = pagerState.currentPage == index,
-                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(index) } },
-                            text = { Text(title, color = if (pagerState.currentPage == index) LocalGKColors.current.primary else LocalGKColors.current.textSecondary) }
+                    Box(
+                        modifier = Modifier.size(192.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(192.dp)
+                                .scale(pulseScale)
+                                .background(Brush.radialGradient(listOf(themeColor.copy(alpha = 0.25f), Color.Transparent)))
                         )
-                    }
-                }
-
-                HorizontalPager(state = pagerState, modifier = Modifier.weight(1f)) { page ->
-                    if (page == 0) {
-                        // USER CERTS TAB
-                        if (userCerts.isEmpty()) {
-                            EmptyStateView(
-                                icon = Icons.Default.Security,
-                                title = "Trust Store Clean",
-                                message = "No user-installed certificates found. You are safe from user-level MITM attacks.",
-                                lastScanTime = lastScanTime,
-                                onRescan = { viewModel.rescan() }
-                            )
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                if (vulnerableApps.isNotEmpty()) {
-                                    item {
-                                        VulnerableAppsWarning(vulnerableApps)
-                                        Spacer(Modifier.height(12.dp))
-                                    }
-                                }
-                                item {
-                                    SectionHeader("User-Installed Certificates")
-                                    Spacer(Modifier.height(8.dp))
-                                }
-                                items(userCerts) { cert ->
-                                    CertItemCard(cert) { viewModel.removeDemoData() }
-                                }
-                            }
+                        
+                        val progressAnim = remember { Animatable(0f) }
+                        LaunchedEffect(scoreClamped) {
+                            progressAnim.animateTo(scoreClamped / 100f, animationSpec = tween(1500, easing = FastOutSlowInEasing))
                         }
-                    } else {
-                        // SYSTEM CERTS TAB
-                        if (systemCerts.isEmpty()) {
-                            EmptyStateView(
-                                icon = Icons.Default.Info,
-                                title = "No System Certificates",
-                                message = "This is highly unusual and might indicate a damaged Android OS.",
-                                lastScanTime = lastScanTime,
-                                onRescan = { viewModel.rescan() }
+                        
+                        Canvas(modifier = Modifier.size(180.dp).rotate(-90f)) {
+                            drawArc(
+                                color = Color.White.copy(alpha = 0.05f), startAngle = 0f, sweepAngle = 360f, useCenter = false,
+                                style = Stroke(width = 8.dp.toPx())
                             )
-                        } else {
-                            LazyColumn(
-                                contentPadding = PaddingValues(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                item {
-                                    Text("System certificates are baked into your Android OS and are implicitly trusted by almost all applications. They cannot be easily removed without root access.", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
-                                    Spacer(Modifier.height(16.dp))
-                                }
-                                items(systemCerts) { cert ->
-                                    CertItemCard(cert) {}
-                                }
-                            }
+                            drawArc(
+                                color = themeColor, startAngle = 0f, sweepAngle = 360f * progressAnim.value, useCenter = false,
+                                style = Stroke(width = 8.dp.toPx(), cap = StrokeCap.Round)
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(text = "$scoreClamped", fontSize = 48.sp, fontWeight = FontWeight.Bold, color = themeColor)
+                            Text(text = "/ 100", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = LocalGKColors.current.textSecondary)
                         }
                     }
-                }
-            }
-        }
-    }
-}
 
-@Composable
-fun EmptyStateView(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, message: String, lastScanTime: Long, onRescan: () -> Unit) {
-    Box(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(icon, null, tint = LocalGKColors.current.accentGreen, modifier = Modifier.size(64.dp))
-            Spacer(Modifier.height(16.dp))
-            Text(title, style = MaterialTheme.typography.titleLarge, color = LocalGKColors.current.textPrimary)
-            Spacer(Modifier.height(4.dp))
-            Text(message, color = LocalGKColors.current.textSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            if (lastScanTime > 0L) {
-                Spacer(Modifier.height(8.dp))
-                val elapsed = (System.currentTimeMillis() - lastScanTime) / 1000 / 60
-                val label = if (elapsed < 1) "just now" else "${elapsed}m ago"
-                Text("Last scanned: $label", color = LocalGKColors.current.textTertiary, style = MaterialTheme.typography.bodySmall)
-            }
-            Spacer(Modifier.height(16.dp))
-            OutlinedButton(
-                onClick = onRescan,
-                border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.primary)
-            ) {
-                Text("Rescan", color = LocalGKColors.current.primary)
-            }
-        }
-    }
-}
-
-@Composable
-fun VulnerableAppsWarning(vulnerableApps: List<VulnerableAppInfo>) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = LocalGKColors.current.accentRed.copy(alpha = 0.1f)),
-        border = androidx.compose.foundation.BorderStroke(1.dp, LocalGKColors.current.accentRed.copy(alpha = 0.3f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.WarningAmber, null, tint = LocalGKColors.current.accentRed)
-                Spacer(Modifier.width(8.dp))
-                Text("Apps Vulnerable to User CAs", style = MaterialTheme.typography.titleMedium, color = LocalGKColors.current.accentRed, fontWeight = FontWeight.Bold)
-            }
-            Spacer(Modifier.height(8.dp))
-            Text("The following installed apps target an older Android version (API < 24) and therefore natively trust your User Certificates. Their HTTPS traffic can be fully decrypted by whichever entity installed the User CA.", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textPrimary)
-            Spacer(Modifier.height(12.dp))
-            
-            Column(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(LocalGKColors.current.card).padding(12.dp)) {
-                vulnerableApps.forEachIndexed { index, app ->
-                    Text(app.appName, style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textPrimary, fontWeight = FontWeight.Medium)
-                    Text(app.packageName, style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textSecondary)
-                    if (index < vulnerableApps.size - 1) {
-                        HorizontalDivider(color = LocalGKColors.current.border, modifier = Modifier.padding(vertical = 8.dp))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun CertItemCard(cert: RogueCertInfo, onRemoveDemo: () -> Unit) {
-    val isHighRisk = cert.riskLevel == "HIGH"
-    val color = if (isHighRisk) LocalGKColors.current.accentRed else if (cert.isUserInstalled) LocalGKColors.current.accentOrange else LocalGKColors.current.primary
-    val icon = if (isHighRisk) Icons.Default.Warning else Icons.Default.Info
-
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = LocalGKColors.current.card),
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.3f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(color.copy(alpha = 0.15f)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(icon, null, tint = color, modifier = Modifier.size(24.dp))
-                }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
+                    Spacer(Modifier.height(16.dp))
                     Text(
-                        if (isHighRisk) "High Risk User Certificate" else if (cert.isUserInstalled) "User Certificate" else "System Certificate",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = color,
-                        fontWeight = FontWeight.Bold
+                        if (isPerfect) "Device is Secure" else "Review Suggested",
+                        style = MaterialTheme.typography.titleLarge, color = LocalGKColors.current.textPrimary
                     )
-                    Text(cert.alias, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textTertiary, maxLines = 1)
+                    Text(
+                        if (isPerfect) "No untrusted certificates detected." else "${userCerts.size} user-installed certificates detected",
+                        style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textSecondary, modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
-            
-            Spacer(Modifier.height(16.dp))
-            HorizontalDivider(color = LocalGKColors.current.border)
-            Spacer(Modifier.height(16.dp))
-            
-            Text("Issuer", style = MaterialTheme.typography.labelMedium, color = LocalGKColors.current.textTertiary)
-            Text(cert.issuerName, style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textPrimary)
-            
-            Spacer(Modifier.height(8.dp))
-            Text("Subject", style = MaterialTheme.typography.labelMedium, color = LocalGKColors.current.textTertiary)
-            Text(cert.subjectName, style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textPrimary)
-            
-            Spacer(Modifier.height(8.dp))
-            Text("Expires", style = MaterialTheme.typography.labelMedium, color = LocalGKColors.current.textTertiary)
-            Text(cert.expiresAt, style = MaterialTheme.typography.bodyMedium, color = LocalGKColors.current.textPrimary)
 
-            if (cert.isUserInstalled) {
-                Spacer(Modifier.height(16.dp))
-                val context = androidx.compose.ui.platform.LocalContext.current
-                Button(
-                    onClick = {
-                        if (cert.alias == "user:demo_charles_proxy") {
-                            onRemoveDemo()
-                        } else {
-                            val intent = android.content.Intent(android.provider.Settings.ACTION_SECURITY_SETTINGS)
-                            context.startActivity(intent)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(42.dp),
-                    shape = RoundedCornerShape(10.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = color.copy(alpha = 0.15f),
-                        contentColor = color
+            val currentList = if (selectedTabIndex == 0) userCerts else systemCerts
+
+            if (currentList.isEmpty()) {
+                item {
+                    Text(
+                        "No certificates found in this category.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = LocalGKColors.current.textSecondary,
+                        modifier = Modifier.padding(top = 16.dp)
                     )
-                ) {
-                    Icon(Icons.Default.Warning, "Remove", modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("Remove from Device", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.bodySmall)
+                }
+            } else {
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (selectedTabIndex == 0) "USER CERTIFICATES" else "SYSTEM CERTIFICATES", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = LocalGKColors.current.textSecondary, letterSpacing = 0.5.sp)
+                            if (selectedTabIndex == 0) {
+                                Spacer(Modifier.width(8.dp))
+                                Icon(Icons.Filled.Info, null, tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(16.dp))
+                            }
+                        }
+                        Text("${currentList.size} Active", fontSize = 14.sp, color = LocalGKColors.current.textTertiary)
+                    }
+                }
+
+                items(currentList) { cert ->
+                    CertRow(cert = cert, onClick = { selectedCert = cert })
                 }
             }
         }
+    }
+
+    if (selectedCert != null) {
+        ModalBottomSheet(
+            onDismissRequest = { selectedCert = null },
+            containerColor = surfaceColor,
+            contentColor = LocalGKColors.current.textPrimary
+        ) {
+            CertDetailView(selectedCert!!)
+        }
+    }
+
+    if (showInfoDialog) {
+        GKInfoDialog(
+            title = "Trust Check",
+            body = "Trust Check scans your device for installed SSL certificates.\n\nMalicious apps or compromised networks can install 'Rogue Certificates' which allow them to secretly intercept and read your secure HTTPS traffic (like banking or passwords).\n\n• System Certificates: Installed by Android, generally safe.\n• User Certificates: Installed by you or third-party apps, higher risk and should be reviewed.",
+            accentColor = primaryColor,
+            onDismiss = { showInfoDialog = false }
+        )
+    }
+}
+
+@Composable
+fun CertRow(cert: CertificateInfo, onClick: () -> Unit) {
+    val isHighRisk = cert.detectionConfidence == "HIGH" && cert.isUserCertificate
+    val riskColor = if (cert.isExpired) Color.Gray else if (isHighRisk) Color(0xFFF44336) else if (cert.isUserCertificate) Color(0xFFFFC107) else Color(0xFF37DF66)
+    val icon = if (isHighRisk) Icons.Filled.AdminPanelSettings else if (cert.isUserCertificate) Icons.Filled.Security else Icons.Filled.VerifiedUser
+
+    val format = remember { java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault()) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(Color.White.copy(alpha = 0.05f))
+            .clickable { onClick() }
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier.size(40.dp).clip(RoundedCornerShape(8.dp)).background(riskColor.copy(alpha = 0.1f)).border(1.dp, riskColor.copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(icon, null, tint = riskColor, modifier = Modifier.size(20.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(cert.alias, style = MaterialTheme.typography.bodyLarge, color = LocalGKColors.current.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Issuer: ${cert.issuerName}", style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Expires: ${format.format(java.util.Date(cert.validUntil))}", style = MaterialTheme.typography.labelSmall, color = LocalGKColors.current.textTertiary)
+        }
+    }
+}
+
+@Composable
+fun CertDetailView(cert: CertificateInfo) {
+    val format = remember { java.text.SimpleDateFormat("MMM dd, yyyy HH:mm:ss", java.util.Locale.getDefault()) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+    ) {
+        Text("Certificate Details", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(16.dp))
+
+        LazyColumn {
+            item { DetailItem("Alias", cert.alias) }
+            item { DetailItem("Type", if (cert.isSystemCertificate) "System" else "User-Installed") }
+            item { DetailItem("Status", cert.trustStatus) }
+            item { DetailItem("Subject DN", cert.subjectName) }
+            item { DetailItem("Issuer DN", cert.issuerName) }
+            item { DetailItem("Serial Number", cert.serialNumber ?: "N/A") }
+            item { DetailItem("Signature Algorithm", cert.signatureAlgorithm) }
+            item { DetailItem("Public Key Algorithm", cert.publicKeyAlgorithm) }
+            item { DetailItem("Valid From", format.format(java.util.Date(cert.validFrom))) }
+            item { DetailItem("Valid Until", format.format(java.util.Date(cert.validUntil))) }
+            item { DetailItem("SHA-1 Fingerprint", cert.sha1Fingerprint) }
+            item { DetailItem("SHA-256 Fingerprint", cert.sha256Fingerprint) }
+
+            if (cert.detectedTrustingApps.isNotEmpty()) {
+                item {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Apps with specific trust configuration:", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = LocalGKColors.current.textPrimary)
+                    cert.detectedTrustingApps.forEach { appName ->
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowRight, null, tint = LocalGKColors.current.textSecondary, modifier = Modifier.size(16.dp))
+                            Text(appName, style = MaterialTheme.typography.bodySmall, color = LocalGKColors.current.textSecondary)
+                        }
+                    }
+                }
+            }
+
+            item {
+                Spacer(modifier = Modifier.height(24.dp))
+                Text("Raw PEM", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = LocalGKColors.current.textPrimary)
+                Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(Color.Black.copy(alpha = 0.3f)).padding(8.dp)) {
+                    Text(cert.pemEncoded, fontSize = 10.sp, color = LocalGKColors.current.textSecondary, style = androidx.compose.ui.text.TextStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace))
+                }
+                Spacer(modifier = Modifier.height(48.dp))
+            }
+        }
+    }
+}
+
+@Composable
+fun DetailItem(label: String, value: String) {
+    Column(modifier = Modifier.padding(bottom = 12.dp)) {
+        Text(label, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = LocalGKColors.current.textSecondary, letterSpacing = 0.5.sp)
+        Text(value, fontSize = 14.sp, color = LocalGKColors.current.textPrimary)
     }
 }

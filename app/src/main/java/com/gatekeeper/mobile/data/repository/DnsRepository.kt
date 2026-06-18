@@ -18,6 +18,12 @@ class DnsRepository @Inject constructor(
     suspend fun getActiveBlacklist(): List<String> = dao.getActiveBlacklistDomains()
     suspend fun getActiveWhitelist(): List<String> = dao.getActiveWhitelistDomains()
 
+    // Paged variants for in-memory reload — avoids loading 175k+ strings into one List
+    suspend fun getBlacklistPage(limit: Int, offset: Int): List<String> = dao.getBlacklistPage(limit, offset)
+    suspend fun getWhitelistPage(limit: Int, offset: Int): List<String> = dao.getWhitelistPage(limit, offset)
+    suspend fun getBlacklistCount(): Int = dao.getBlacklistCount()
+    suspend fun getWhitelistCount(): Int = dao.getWhitelistCount()
+
     suspend fun addDomain(domain: String, listType: String, source: String = "user") {
         dao.insert(DnsEntry(domain = domain, listType = listType, source = source))
     }

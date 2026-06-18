@@ -85,56 +85,63 @@ class TrafficLogger @Inject constructor(
      * logged within DEDUP_WINDOW_MS. Non-blocking — safe from the packet loop.
      */
     fun log(
-        packageName: String,
-        appName: String,
+        uid: Int? = null,
+        packageName: String?,
+        appName: String?,
         protocol: String,
-        localIp: String,
-        localPort: Int,
-        remoteIp: String,
-        remotePort: Int,
-        remoteHostname: String? = null,
+        sourceIp: String,
+        sourcePort: Int,
+        destinationIp: String,
+        destinationPort: Int,
+        hostname: String? = null,
         country: String? = null,
         countryCode: String? = null,
-        bytesIn: Long = 0,
-        bytesOut: Long = 0,
+        bytesSent: Long = 0,
+        bytesReceived: Long = 0,
         wasBlocked: Boolean = false
     ) {
-        val dedupKey = "$packageName|$remoteIp|$wasBlocked"
+        val dedupKey = "$packageName|$destinationIp|$wasBlocked"
         val now = System.currentTimeMillis()
         val last = dedupCache[dedupKey] ?: 0L
         if (now - last < DEDUP_WINDOW_MS) return  // Duplicate — skip silently
         dedupCache[dedupKey] = now
 
-        val (resolvedCountry, resolvedCode) = if (remoteIp.isNotBlank()) {
-            geoIpResolver.resolve(remoteIp)
+        val (resolvedCountry, resolvedCode) = if (destinationIp.isNotBlank()) {
+            geoIpResolver.resolve(destinationIp)
         } else {
             Pair(country, countryCode)
         }
 
         // F15: Cross-correlate traffic with sensor logs for exfiltration detection
-        if (!wasBlocked && bytesOut > 0) {
+        if (!wasBlocked && bytesSent > 0 && packageName != null) {
             exfiltrationDetector.analyzeTraffic(
                 packageName = packageName,
-                appName = appName,
-                remoteIp = remoteIp,
-                bytesOut = bytesOut,
+                appName = appName ?: "Unknown App",
+                remoteIp = destinationIp,
+                bytesOut = bytesSent,
                 countryCode = resolvedCode
             )
         }
 
+        val attribution = NetworkAttributionMapper.resolveService(hostname, destinationPort)
+
         val entry = ConnectionLog(
+            uid = uid,
             packageName = packageName,
-            appName = appName,
+            appName = appName ?: "Unknown App",
             protocol = protocol,
-            localIp = localIp,
-            localPort = localPort,
-            remoteIp = remoteIp,
-            remotePort = remotePort,
-            remoteHostname = remoteHostname,
+            sourceIp = sourceIp,
+            sourcePort = sourcePort,
+            destinationIp = destinationIp,
+            destinationPort = destinationPort,
+            hostname = hostname,
+            serviceName = attribution.serviceName,
+            attributionConfidence = if (packageName != null) com.gatekeeper.mobile.data.db.entity.ConfidenceLevel.HIGH else com.gatekeeper.mobile.data.db.entity.ConfidenceLevel.UNKNOWN,
+            serviceConfidence = attribution.serviceConfidence,
             country = resolvedCountry,
             countryCode = resolvedCode,
-            bytesIn = bytesIn,
-            bytesOut = bytesOut,
+            bytesSent = bytesSent,
+            bytesReceived = bytesReceived,
             wasBlocked = wasBlocked
         )
         channel.trySend(entry)

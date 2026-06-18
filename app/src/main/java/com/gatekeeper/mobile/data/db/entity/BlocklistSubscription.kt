@@ -11,5 +11,7 @@ data class BlocklistSubscription(
     val type: String,
     val isEnabled: Boolean = true,
     val lastRefreshedAt: Long = 0L,
-    val domainCount: Int = 0
+    val domainCount: Int = 0,
+    val fetchStatus: String = "PENDING", // PENDING, SUCCESS, FAILED
+    val errorReason: String? = null
 )

@@ -1,6 +1,8 @@
 package com.gatekeeper.mobile.ui.screens.dashboard
 
 import androidx.lifecycle.ViewModel
+import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import com.gatekeeper.mobile.data.repository.DnsRepository
 import com.gatekeeper.mobile.data.repository.FirewallRepository
 import com.gatekeeper.mobile.data.repository.TrafficRepository
@@ -27,6 +29,7 @@ import javax.inject.Inject
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     firewallRepository: FirewallRepository,
     dnsRepository: DnsRepository,
     trafficRepository: TrafficRepository,
@@ -93,7 +96,7 @@ class DashboardViewModel @Inject constructor(
 
     fun rescanCerts() {
         viewModelScope.launch {
-            val (_, userCerts) = certificateAuditor.auditCertificates()
+            val (_, userCerts) = certificateAuditor.auditCertificates(context)
             _rogueCertsCount.value = userCerts.size
         }
     }

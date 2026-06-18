@@ -63,17 +63,9 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val onboardingDone by settingsRepository.onboardingDoneFlow.collectAsState(initial = false)
-            val themeMode by settingsRepository.themeModeFlow.collectAsState(initial = 0)
             val deepLink by _deepLinkRoute.collectAsState()
 
-            val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
-            val isDarkTheme = when (themeMode) {
-                1 -> false
-                2 -> true
-                else -> isSystemDark
-            }
-
-            GateKeeperTheme(darkTheme = isDarkTheme) {
+            GateKeeperTheme(darkTheme = true) {
                 AppNavigation(
                     startDestination = if (onboardingDone) "dashboard" else "onboarding",
                     deepLinkRoute = deepLink,

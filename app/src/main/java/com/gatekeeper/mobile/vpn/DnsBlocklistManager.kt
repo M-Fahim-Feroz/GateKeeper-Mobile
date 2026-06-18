@@ -74,26 +74,18 @@ class DnsBlocklistManager @Inject constructor(
      * This function suspends forever (until the VPN stops).
      */
     suspend fun observeAndSync() {
-        // Run both watchers concurrently using coroutineScope
+        // Watch only the *count* of each list, not the full list of entities.
+        // This avoids materialising 175k+ DnsEntry objects on every DB change.
+        // When the count changes we call the paged reloadAll() to safely rebuild in-memory sets.
         kotlinx.coroutines.coroutineScope {
             launch {
-                dnsRepository.observeBlacklist().collect { entries ->
-                    val domains = entries.filter { it.isActive }.map { it.domain }.toSet()
-                    val threatDomains = withContext(Dispatchers.IO) {
-                        threatFeedRepository.getThreatDomains()
-                    }
-                    blacklistedDomains.clear()
-                    blacklistedDomains.addAll(domains)
-                    blacklistedDomains.addAll(threatDomains)
-                    Log.i(TAG, "DNS blocklist live update: ${blacklistedDomains.size} blocked domains")
+                dnsRepository.observeBlacklistCount().collect {
+                    reloadAll()
                 }
             }
             launch {
-                dnsRepository.observeWhitelist().collect { entries ->
-                    val domains = entries.filter { it.isActive }.map { it.domain }.toSet()
-                    whitelistedDomains.clear()
-                    whitelistedDomains.addAll(domains)
-                    Log.i(TAG, "DNS allowlist live update: ${whitelistedDomains.size} allowed domains")
+                dnsRepository.observeWhitelistCount().collect {
+                    reloadAll()
                 }
             }
         }
@@ -101,39 +93,71 @@ class DnsBlocklistManager @Inject constructor(
 
     private suspend fun reloadAll() {
         try {
-            val userDomains = dnsRepository.getActiveBlacklist()
-            val threatDomains = threatFeedRepository.getThreatDomains()
+            val PAGE = 5_000
+
+            // Load blacklist in pages to avoid OOM with large feeds
             blacklistedDomains.clear()
-            blacklistedDomains.addAll(userDomains)
+            var offset = 0
+            while (true) {
+                val page = dnsRepository.getBlacklistPage(PAGE, offset)
+                if (page.isEmpty()) break
+                blacklistedDomains.addAll(page)
+                offset += page.size
+                if (page.size < PAGE) break
+            }
+            // Merge threat feed domains
+            val threatDomains = threatFeedRepository.getThreatDomains()
             blacklistedDomains.addAll(threatDomains)
 
-            val whitelistDomains = dnsRepository.getActiveWhitelist()
+            // Load whitelist in pages
             whitelistedDomains.clear()
-            whitelistedDomains.addAll(whitelistDomains)
+            offset = 0
+            while (true) {
+                val page = dnsRepository.getWhitelistPage(PAGE, offset)
+                if (page.isEmpty()) break
+                whitelistedDomains.addAll(page)
+                offset += page.size
+                if (page.size < PAGE) break
+            }
 
-            Log.i(TAG, "Initial load: ${blacklistedDomains.size} blocked, ${whitelistedDomains.size} allowed")
+            Log.i(TAG, "Reload complete: ${blacklistedDomains.size} blocked, ${whitelistedDomains.size} allowed")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load blocklists from DB", e)
         }
     }
 
     /**
-     * Import a blocklist from a remote URL (one domain per line).
+     * Import a blocklist from a remote URL, processing it line-by-line to avoid OOM.
+     * Domains are inserted in small batches as they are read — the full list is never
+     * held in memory. A hard cap of MAX_DOMAINS_PER_FEED prevents runaway feeds from
+     * consuming all available memory and crashing the app.
      */
     suspend fun importFromUrl(urlString: String, listType: String = "blacklist", sourceName: String = urlString): Int {
         return withContext(Dispatchers.IO) {
+            val MAX_DOMAINS_PER_FEED = 300_000
+            val BATCH_SIZE = 500
+
             try {
-                Log.i(TAG, "Downloading blocklist from $urlString")
+                Log.i(TAG, "Streaming blocklist from $urlString")
                 val url = URL(urlString)
                 val connection = url.openConnection()
-                connection.connectTimeout = 10000
-                connection.readTimeout = 30000
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 60_000
 
-                val domains = mutableListOf<String>()
+                // Delete old entries for this source before we start importing new ones
+                dnsRepository.clearBySource(sourceName)
+
+                val batch = mutableListOf<String>()
+                var totalInserted = 0
 
                 BufferedReader(InputStreamReader(connection.getInputStream())).use { reader ->
                     var line: String?
                     while (reader.readLine().also { line = it } != null) {
+                        if (totalInserted + batch.size >= MAX_DOMAINS_PER_FEED) {
+                            Log.w(TAG, "Feed cap ($MAX_DOMAINS_PER_FEED) reached for $urlString — stopping early")
+                            break
+                        }
+
                         val trimmed = line!!.trim()
                         if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!")) continue
 
@@ -148,20 +172,30 @@ class DnsBlocklistManager @Inject constructor(
                         if (domain != "localhost" && domain != "localhost.localdomain" &&
                             domain != "broadcasthost" && domain != "0.0.0.0" && domain != "127.0.0.1" &&
                             domain.contains(".")) {
-                            domains.add(domain.lowercase())
+                            batch.add(domain.lowercase())
+                        }
+
+                        // Flush the batch every BATCH_SIZE entries — never hold the full list
+                        if (batch.size >= BATCH_SIZE) {
+                            dnsRepository.addDomains(batch, listType, sourceName)
+                            totalInserted += batch.size
+                            batch.clear()
                         }
                     }
                 }
 
-                Log.i(TAG, "Parsed ${domains.size} domains from URL. Inserting...")
-                dnsRepository.clearBySource(sourceName)
-                domains.chunked(5000).forEach { chunk ->
-                    dnsRepository.addDomains(chunk, listType, sourceName)
+                // Flush any remaining entries
+                if (batch.isNotEmpty()) {
+                    dnsRepository.addDomains(batch, listType, sourceName)
+                    totalInserted += batch.size
+                    batch.clear()
                 }
 
-                // Reload in-memory immediately
+                Log.i(TAG, "Imported $totalInserted domains from $urlString")
+
+                // Reload in-memory set once after the full import is done
                 reloadAll()
-                domains.size
+                totalInserted
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to import blocklist from $urlString", e)
                 throw e

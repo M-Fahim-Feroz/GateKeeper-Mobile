@@ -2,6 +2,7 @@ package com.gatekeeper.mobile.domain.usecase
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import com.gatekeeper.mobile.data.db.entity.KnownNetwork
 import com.gatekeeper.mobile.domain.model.WifiNetworkInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
@@ -15,29 +16,24 @@ import javax.inject.Singleton
 class ScanWifiNetworksUseCase @Inject constructor(
     @param:ApplicationContext private val context: Context
 ) {
-    operator fun invoke(): List<WifiNetworkInfo> {
+    operator fun invoke(knownNetworks: List<KnownNetwork> = emptyList()): List<WifiNetworkInfo> {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val scanResults = wifiManager.scanResults
 
-        // Build map of SSID -> set of previously seen BSSIDs for evil twin detection
-        @Suppress("DEPRECATION")
-        val knownBssidsBySSID: Map<String, Set<String>> = try {
-            wifiManager.configuredNetworks
-                ?.groupBy { it.SSID.trim('"') }
-                ?.mapValues { (_, configs) -> configs.mapNotNull { it.BSSID }.toSet() }
-                ?: emptyMap()
-        } catch (_: Exception) { emptyMap() }
+        // Build map of SSID -> set of known BSSIDs from our DB
+        val knownBssidsBySSID: Map<String, Set<String>> = knownNetworks
+            .groupBy { it.ssid }
+            .mapValues { (_, nets) -> nets.map { it.bssid }.toSet() }
 
         return scanResults.map { result ->
             val securityType = getSecurityType(result.capabilities)
             val securityScore = calculateSecurityScore(securityType, result.level)
             val signalLevel = WifiManager.calculateSignalLevel(result.level, 5)
 
-            // Evil twin: SSID is known but BSSID doesn't match any previously seen BSSID
             val knownForSsid = knownBssidsBySSID[result.SSID]
             val isEvilTwin = knownForSsid != null && result.BSSID !in knownForSsid
-            // Unknown network with unusually strong signal (> -50 dBm) = suspicious
-            val isSuspicious = !isEvilTwin && knownForSsid == null && result.level > -50
+            // Raised threshold from -50 to -65 dBm to reduce false positives
+            val isSuspicious = !isEvilTwin && knownForSsid == null && result.level > -65
 
             WifiNetworkInfo(
                 ssid = result.SSID.ifBlank { "(Hidden Network)" },

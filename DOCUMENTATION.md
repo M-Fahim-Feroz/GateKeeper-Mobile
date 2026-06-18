@@ -1,7 +1,7 @@
 # GateKeeper Mobile — Comprehensive Project Documentation
 
 <div align="center">
-  <h3>🛡️ AI-Powered Android Network Security Suite</h3>
+  <h3>🛡️ Android Network Security Suite</h3>
   <p>Built as part of an Advanced Network Security Final Year Project</p>
 </div>
 
@@ -32,13 +32,11 @@
    - [Room Database Schema](#51-room-database-schema)
    - [Repositories](#52-repositories)
    - [DataStore Preferences](#53-datastore-preferences)
-   - [Remote API (AI Backend)](#54-remote-api-ai-backend)
 6. [UI Layer — Screens & ViewModels](#6-ui-layer--screens--viewmodels)
    - [Dashboard](#61-dashboard)
    - [Firewall](#62-firewall)
    - [DNS Filter](#63-dns-filter)
    - [Traffic Monitor](#64-traffic-monitor)
-   - [AI Chat](#65-ai-chat)
    - [Threat Feed](#66-threat-feed)
    - [Wi-Fi Scanner](#67-wi-fi-scanner)
    - [Permission Auditor](#68-permission-auditor)
@@ -72,7 +70,6 @@
 | Per-App Firewall | Block specific apps from using Wi-Fi or Mobile Data |
 | DNS Sinkhole | Block ad, tracking, and malware domains at the DNS layer |
 | Traffic Monitor | Real-time per-app bandwidth and connection logging |
-| AI Security Assistant | Natural language firewall control via GateKeeper-Agent backend |
 | Threat Intelligence | IP & domain blacklists from public threat feeds |
 | Evil Twin Detection | Rogue Wi-Fi access point detection via BSSID tracking |
 | IMSI Catcher Detection | Alerts on suspicious cellular downgrade to 2G |
@@ -94,7 +91,7 @@
 ```
 ┌────────────────────────────────────────────────────────────┐
 │                     UI Layer (Compose)                      │
-│  Dashboard │ Firewall │ DNS │ Traffic │ AI │ Settings │ … │
+│  Dashboard │ Firewall │ DNS │ Traffic │ Settings │ … │
 └──────────────────────┬─────────────────────────────────────┘
                        │ ViewModel (StateFlow / Flow)
 ┌──────────────────────▼─────────────────────────────────────┐
@@ -152,9 +149,6 @@ com.gatekeeper.mobile/
 │   │   └── entity/               # Room entities (9 tables)
 │   ├── model/
 │   │   └── BuiltInBlocklists.kt  # Hardcoded curated blocklist URLs
-│   ├── remote/
-│   │   ├── AiApiService.kt       # Retrofit interface for GateKeeper-Agent
-│   │   └── dto/Dtos.kt           # Request/Response data classes
 │   └── repository/               # Repository implementations (8 repositories)
 │
 ├── domain/
@@ -181,7 +175,6 @@ com.gatekeeper.mobile/
     │   ├── firewall/
     │   ├── dns/
     │   ├── traffic/
-    │   ├── aichat/
     │   ├── threats/
     │   ├── wifiscanner/
     │   ├── permissionauditor/
@@ -524,7 +517,6 @@ All repositories are `@Singleton` injected via Hilt. They act as the single sour
 | `KnownNetworkRepository` | SSID/BSSID trust tracking |
 | `SensorLogRepository` | Store and observe sensor access records |
 | `SettingsRepository` | Persist user preferences via Jetpack DataStore |
-| `AiChatRepository` | Send messages to and receive responses from the AI backend |
 
 ---
 
@@ -541,32 +533,6 @@ Preferences stored via Jetpack DataStore (no XML SharedPreferences):
 | `block_dns_leak` | Boolean | `true` | Drop DNS-over-HTTPS bypass attempts |
 | `screen_off_blocking` | Boolean | `false` | Enable global screen-off mode |
 | `onboarding_done` | Boolean | `false` | Whether the user has completed onboarding |
-
----
-
-### 5.4 Remote API (AI Backend)
-
-**Interface**: `data/remote/AiApiService.kt`  
-**Base URL**: Configurable via Settings; defaults to `http://10.0.2.2:8888/` (Android emulator loopback).
-
-| Endpoint | Method | Description |
-|---|---|---|
-| `GET /health` | `checkHealth()` | Returns `{"status": "ok"}` to verify backend connectivity |
-| `POST /chat` | `sendMessage(ChatRequest)` | Sends a natural language message; returns AI response with optional tool call results |
-| `POST /clear-history` | `clearHistory(sessionId)` | Clears the conversation history for a session |
-
-#### ChatResponse Fields
-
-| Field | Type | Description |
-|---|---|---|
-| `response` | String | AI-generated text reply |
-| `tool_calls` | List\<String\> | Names of tools the AI invoked (e.g. "block_app") |
-| `execution_steps` | List\<Map\> | Step-by-step execution trace |
-| `operation_results` | List\<Map\> | Outcomes of tool operations |
-| `partial_failures` | List\<Map\> | Any operations that failed |
-| `warnings` | List\<String\> | Non-fatal warnings |
-| `outcome` | String | Summary outcome (e.g. "success") |
-| `trace_id` | String | Unique ID for the request (for debugging) |
 
 ---
 
@@ -643,21 +609,6 @@ Displays:
 
 ---
 
-### 6.5 AI Chat
-
-**Files**: `ui/screens/aichat/AiChatScreen.kt`, `AiChatViewModel.kt`
-
-A conversational interface to the GateKeeper-Agent AI backend. Features:
-- Chat bubble UI distinguishing user and assistant messages.
-- Loading indicator while waiting for the AI response.
-- Tool call badges: when the AI invoked a backend tool (e.g., `block_app`, `show_threats`), the tool names are displayed inline.
-- Session management: "New Chat" clears history on the backend via `POST /clear-history`.
-- Backend connectivity check on screen open via `GET /health`.
-
-**ViewModel** uses `AiChatRepository.sendMessage()` which calls `AiApiService.sendMessage()` with the `mobile-session` session ID.
-
----
-
 ### 6.6 Threat Feed
 
 **Files**: `ui/screens/threats/ThreatFeedScreen.kt`, `ThreatFeedViewModel.kt`
@@ -721,7 +672,6 @@ The settings area is split into a landing screen (list of setting categories) an
 | Category | Settings |
 |---|---|
 | VPN & Network | Auto-start on boot, DNS leak blocking |
-| AI Backend | Backend IP address, port, connection test |
 | Blocklists | Subscription management (also accessible from DNS screen) |
 | Privacy | Screen-off blocking mode |
 | About | App version, open source licenses |
@@ -756,7 +706,6 @@ Sealed class `Screen` defines all navigation routes:
 | `firewall` | `Screen.Firewall` | ✅ |
 | `dns` | `Screen.DnsFilter` | ✅ |
 | `traffic` | `Screen.Traffic` | ✅ |
-| `ai_chat` | `Screen.AiChat` | ✅ |
 | `settings` | `Screen.Settings` | ✅ (in nav rail) |
 | `threat_feed` | `Screen.ThreatFeed` | ❌ |
 | `permission_auditor` | `Screen.PermissionAuditor` | ❌ |
@@ -780,11 +729,6 @@ Sealed class `Screen` defines all navigation routes:
 | All 9 DAOs | DAO interfaces | Derived from `AppDatabase` |
 | `OkHttpClient` | HTTP client | Intercepts requests to rewrite base URL from DataStore `backend_ip` |
 | `Retrofit` | REST client | Default base `http://10.0.2.2:8888/`; overridden per-request by OkHttp interceptor |
-| `AiApiService` | Retrofit interface | Created from the `Retrofit` instance |
-
-### Dynamic Backend URL
-
-The OkHttp interceptor reads `SettingsRepository.backendIpFlow` synchronously (via `runBlocking`) for every HTTP request and rewrites the URL to target the user-configured IP on port 8888. This allows changing the AI backend address at runtime without restarting the app.
 
 ---
 
@@ -952,23 +896,22 @@ All migrations are registered in `AppModule.provideDatabase()` via `addMigration
 GateKeeper Mobile is one component of the **GateKeeper Security Suite FYP**:
 
 ```
-┌─────────────────────────┐     REST API      ┌──────────────────────────┐
-│   GateKeeper Mobile     │ ◄───────────────► │   GateKeeper-Agent       │
-│   (this repository)     │   POST /chat      │   (FastAPI AI Backend)   │
-│   Android VPN + UI      │   GET /health     │   on Windows Desktop     │
-└─────────────────────────┘                   └──────────────────────────┘
-                                                          │
-                                                          ▼
-                                               ┌──────────────────────────┐
-                                               │  GateKeeper Desktop App  │
-                                               │  (React + Electron       │
-                                               │   or Web Frontend)       │
-                                               └──────────────────────────┘
+┌─────────────────────────┐
+│   GateKeeper Mobile     │
+│   (this repository)     │
+│   Android VPN + UI      │
+└─────────────────────────┘
+             │
+             ▼
+┌──────────────────────────┐
+│  GateKeeper Desktop App  │
+│  (React + Electron       │
+│   or Web Frontend)       │
+└──────────────────────────┘
 ```
 
 - **On-device features** (firewall, DNS filter, traffic logging, threat detection) operate entirely offline.
-- **AI features** require the GateKeeper-Agent backend to be reachable on the local network (configurable IP in Settings).
-- The AI can execute firewall and DNS commands on the mobile app by responding with structured `tool_calls` in the chat response.
+- **Desktop Application**: The rules and activity logs can optionally be synchronized and viewed on the desktop React frontend.
 
 ---
 
@@ -1001,12 +944,6 @@ cd GateKeeper-Mobile
 ```
 
 > **Note**: The Android Emulator has known limitations with `VpnService` TUN packet routing. Physical devices are strongly recommended for testing the firewall, DNS filter, and traffic monitor.
-
-### AI Backend Connection
-
-1. Start the GateKeeper-Agent FastAPI server on port 8888.
-2. In GateKeeper Mobile → Settings → AI Backend, enter the server's local IP address.
-3. Tap "Test Connection" to verify connectivity.
 
 ---
 
@@ -1042,7 +979,6 @@ Run instrumented tests (requires connected device):
 | F1 | Per-App Firewall | `PacketFilter.blockedUids` | — |
 | F2 | DNS Sinkhole | `DnsResolver` + `DnsBlocklistManager` | — |
 | F3 | Traffic Monitor | `ConnectionTracker` + `TrafficLogger` | — |
-| F4 | AI Security Assistant | `AiChatRepository` + `AiApiService` | — |
 | F5 | Threat Intelligence | `ThreatFeedManager` | — |
 | F6 | GeoIP Resolution | `GeoIpResolver` (MaxMind offline DB) | — |
 | F7 | Blocklist Subscriptions | `DnsBlocklistManager.importFromUrl()` | — |

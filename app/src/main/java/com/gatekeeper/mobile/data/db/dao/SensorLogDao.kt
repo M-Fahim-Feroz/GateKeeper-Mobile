@@ -26,8 +26,9 @@ data class AppSensorUsage(
 @Dao
 @JvmSuppressWildcards
 interface SensorLogDao {
-    @Query("SELECT * FROM sensor_logs ORDER BY startedAt DESC LIMIT 100")
-    fun observeRecent(): Flow<List<SensorLog>>
+    /** All sensor logs from the last 24 hours, newest first — no row cap */
+    @Query("SELECT * FROM sensor_logs WHERE startedAt >= :sinceMs ORDER BY startedAt DESC")
+    fun observeRecent(sinceMs: Long = System.currentTimeMillis() - 24 * 60 * 60 * 1000L): Flow<List<SensorLog>>
 
     /** Today's sensor summary grouped by type — live-updating for the Privacy Dashboard */
     @Query("""

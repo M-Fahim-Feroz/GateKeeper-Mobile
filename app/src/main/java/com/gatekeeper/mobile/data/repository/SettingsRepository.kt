@@ -42,12 +42,12 @@ class SettingsRepository @Inject constructor(
     val capturePcapFlow: Flow<Boolean> = dataStore.data.map { it[CAPTURE_PCAP] ?: false }
     val backendIpFlow: Flow<String?> = dataStore.data.map { it[BACKEND_IP] }
     val dnsLeakProtectionFlow: Flow<Boolean> = dataStore.data.map { it[DNS_LEAK_PROTECTION] ?: true }
-    val dnsExfilDetectionFlow: Flow<Boolean> = dataStore.data.map { it[DNS_EXFIL_DETECTION] ?: true }
+    val dnsExfilDetectionFlow: Flow<Boolean> = dataStore.data.map { it[DNS_EXFIL_DETECTION] ?: false }
     val screenOffBlockingFlow: Flow<Boolean> = dataStore.data.map { it[SCREEN_OFF_BLOCKING] ?: false }
-    val imsiDetectionFlow: Flow<Boolean> = dataStore.data.map { it[IMSI_DETECTION] ?: true }
+    val imsiDetectionFlow: Flow<Boolean> = dataStore.data.map { it[IMSI_DETECTION] ?: false }
     val firewallBypassDetectFlow: Flow<Boolean> = dataStore.data.map { it[FIREWALL_BYPASS_DETECT] ?: true }
-    val backgroundSensorAlertsFlow: Flow<Boolean> = dataStore.data.map { it[BACKGROUND_SENSOR_ALERTS] ?: true }
-    val evilTwinDetectionFlow: Flow<Boolean> = dataStore.data.map { it[EVIL_TWIN_DETECTION] ?: true }
+    val backgroundSensorAlertsFlow: Flow<Boolean> = dataStore.data.map { it[BACKGROUND_SENSOR_ALERTS] ?: false }
+    val evilTwinDetectionFlow: Flow<Boolean> = dataStore.data.map { it[EVIL_TWIN_DETECTION] ?: false }
     val globalCameraBlockFlow: Flow<Boolean> = dataStore.data.map { it[GLOBAL_CAMERA_BLOCK] ?: false }
     val onboardingDoneFlow: Flow<Boolean> = dataStore.data.map { it[ONBOARDING_DONE] ?: false }
     val autoVpnStartFlow: Flow<Boolean> = dataStore.data.map { it[AUTO_VPN_START] ?: true }

@@ -19,6 +19,7 @@ import com.gatekeeper.mobile.data.db.dao.SensorLogDao
 import com.gatekeeper.mobile.data.db.entity.SecurityAlert
 import com.gatekeeper.mobile.data.db.dao.SecurityAlertDao
 import com.gatekeeper.mobile.data.db.entity.BlocklistSubscription
+import androidx.room.TypeConverters
 import com.gatekeeper.mobile.data.db.dao.BlocklistSubscriptionDao
 
 @Database(
@@ -33,9 +34,10 @@ import com.gatekeeper.mobile.data.db.dao.BlocklistSubscriptionDao
         SecurityAlert::class,
         BlocklistSubscription::class
     ],
-    version = 9,
+    version = 12,
     exportSchema = false
 )
+@TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun firewallRuleDao(): FirewallRuleDao
     abstract fun dnsBlocklistDao(): DnsBlocklistDao

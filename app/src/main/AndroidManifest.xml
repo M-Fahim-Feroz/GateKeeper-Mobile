@@ -11,6 +11,7 @@
     <!-- Location (Required for Wi-Fi scanning) -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />
 
     <!-- VPN permission (auto-granted, user confirms via system dialog) -->
 

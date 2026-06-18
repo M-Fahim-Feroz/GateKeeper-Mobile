@@ -38,7 +38,7 @@ class OnboardingViewModel @Inject constructor(
     }
 
     fun nextStep() {
-        if (_currentStep.value < 3) {
+        if (_currentStep.value < 1) {
             _currentStep.value += 1
         }
     }
