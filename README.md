@@ -112,13 +112,23 @@ graph TD
   <table>
     <tr>
       <td align="center"><img src="public/1.%20Dashboard.png" width="250" alt="Dashboard"/><br/><b>Dashboard</b></td>
-      <td align="center"><img src="public/4.%20NetWatch.png" width="250" alt="Traffic Monitor"/><br/><b>NetWatch</b></td>
-      <td align="center"><img src="public/10.%20Threat%20Intel.png" width="250" alt="Threat Alerts"/><br/><b>Threat Intel</b></td>
+      <td align="center"><img src="public/4.%20NetWatch.png" width="250" alt="Traffic Monitor"/><br/><b>NetWatch Live Traffic</b></td>
+      <td align="center"><img src="public/10.%20Threat%20Intel.png" width="250" alt="Threat Alerts"/><br/><b>Threat Intelligence</b></td>
     </tr>
     <tr>
-      <td align="center"><img src="public/2.%20AppGate.png" width="250" alt="App Gate Firewall"/><br/><b>App Gate</b></td>
-      <td align="center"><img src="public/3.%20WebGate.png" width="250" alt="Web Gate DNS Sinkhole"/><br/><b>Web Gate</b></td>
-      <td align="center"><img src="public/7.%20Privacy_Dashboard_HardwareAccess.png" width="250" alt="Hardware Privacy"/><br/><b>Privacy Dashboard</b></td>
+      <td align="center"><img src="public/2.%20AppGate.png" width="250" alt="App Gate Firewall"/><br/><b>App Gate Firewall</b></td>
+      <td align="center"><img src="public/3.%20WebGate.png" width="250" alt="Web Gate DNS Sinkhole"/><br/><b>Web Gate DNS Sinkhole</b></td>
+      <td align="center"><img src="public/7.%20Privacy_Dashboard_HardwareAccess.png" width="250" alt="Hardware Privacy"/><br/><b>Hardware Privacy Alerts</b></td>
+    </tr>
+    <tr>
+      <td align="center"><img src="public/5.%20Privacy_Dashboard_UserApps.png" width="250" alt="Permission Auditor"/><br/><b>App Permission Auditor</b></td>
+      <td align="center"><img src="public/11.%20Wifi%20Guard.png" width="250" alt="Wi-Fi Guard"/><br/><b>Wi-Fi Security Guard</b></td>
+      <td align="center"><img src="public/Evil%20Twin.png" width="250" alt="Evil Twin"/><br/><b>Evil Twin AP Detection</b></td>
+    </tr>
+    <tr>
+      <td align="center"><img src="public/8.%20CA%20Certificates_System.png" width="250" alt="Certificate Auditor"/><br/><b>CA Certificate Auditor</b></td>
+      <td align="center"><img src="public/Dns%20Leak%20Protection.png" width="250" alt="DNS Leak Protection"/><br/><b>DNS Leak Prevention</b></td>
+      <td align="center"><img src="public/IMSI.png" width="250" alt="IMSI Catcher Detector"/><br/><b>IMSI Catcher (2G) Alerts</b></td>
     </tr>
   </table>
   <p><i>The interface prioritizes critical information delivery while maintaining a premium, vibrant aesthetic.</i></p>
