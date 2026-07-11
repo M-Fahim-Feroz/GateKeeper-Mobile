@@ -1,5 +1,8 @@
 <div align="center">
-  <img src="https://img.icons8.com/?size=512&id=5nL2H4F3U_tO&format=png" width="120" alt="GateKeeper Logo"/>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="public/Dark%20Mode%20logo.png">
+    <img src="public/Light%20Mode%20logo.png" width="150" alt="GateKeeper Logo"/>
+  </picture>
   
   # 🛡️ GateKeeper Mobile
   
@@ -105,14 +108,17 @@ graph TD
 
 ## 🎨 UI & UX Design
 
-*(Placeholder for high-quality GIFs/Screenshots - Highly recommended for portfolio!)*
-
 <div align="center">
   <table>
     <tr>
-      <td><img src="https://via.placeholder.com/250x500.png?text=Dashboard+UI" alt="Dashboard"/></td>
-      <td><img src="https://via.placeholder.com/250x500.png?text=Traffic+Monitor" alt="Traffic Monitor"/></td>
-      <td><img src="https://via.placeholder.com/250x500.png?text=Threat+Alerts" alt="Threat Alerts"/></td>
+      <td align="center"><img src="public/1.%20Dashboard.png" width="250" alt="Dashboard"/><br/><b>Dashboard</b></td>
+      <td align="center"><img src="public/4.%20NetWatch.png" width="250" alt="Traffic Monitor"/><br/><b>NetWatch</b></td>
+      <td align="center"><img src="public/10.%20Threat%20Intel.png" width="250" alt="Threat Alerts"/><br/><b>Threat Intel</b></td>
+    </tr>
+    <tr>
+      <td align="center"><img src="public/2.%20AppGate.png" width="250" alt="App Gate Firewall"/><br/><b>App Gate</b></td>
+      <td align="center"><img src="public/3.%20WebGate.png" width="250" alt="Web Gate DNS Sinkhole"/><br/><b>Web Gate</b></td>
+      <td align="center"><img src="public/7.%20Privacy_Dashboard_HardwareAccess.png" width="250" alt="Hardware Privacy"/><br/><b>Privacy Dashboard</b></td>
     </tr>
   </table>
   <p><i>The interface prioritizes critical information delivery while maintaining a premium, vibrant aesthetic.</i></p>
