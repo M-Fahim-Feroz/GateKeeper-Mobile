@@ -19,3 +19,11 @@ app/debug/
 # OS
 .DS_Store
 Thumbs.db
+
+# Ignored custom/temporary files
+GateKeeper-Mobile-Submission.zip
+permissionauditor_broken.patch
+previous_dns_changes.txt
+recover.py
+recovered_dns.kt
+recovered.txt
