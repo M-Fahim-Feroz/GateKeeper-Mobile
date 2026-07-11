@@ -4,7 +4,7 @@
     <img src="public/Light%20Mode%20logo.png" width="150" alt="GateKeeper Logo"/>
   </picture>
   
-  # 🛡️ GateKeeper Mobile
+  # GateKeeper Mobile
   
   **An advanced, standalone Android security suite built to detect, prevent, and analyze network threats natively.**
 
@@ -17,18 +17,18 @@
 
   ---
   
-  [Overview](#-overview) • [Technical Highlights](#-technical-highlights) • [Features](#-core-features) • [Architecture](#️-system-architecture) • [Getting Started](#️-getting-started)
+  [Overview](#overview) • [Technical Highlights](#technical-highlights) • [Features](#core-features) • [Architecture](#system-architecture) • [Getting Started](#getting-started)
 </div>
 
 ---
 
-## 💡 Overview
+## Overview
 
 Mobile security applications often rely on remote servers to analyze traffic or require rooted devices to enforce strict firewall rules. **GateKeeper Mobile challenges this paradigm.** 
 
 Built as a comprehensive Final Year Project in Advanced Network Security, GateKeeper leverages Android's `VpnService` to create a powerful, system-wide local network sinkhole. It intercepts, analyzes, and filters packets entirely on-device, offering enterprise-grade security features like per-app firewalling, DNS filtering, and live packet inspection without compromising user privacy or device performance.
 
-## 🚀 Technical Highlights
+## Technical Highlights
 
 This project was built not just to function, but to demonstrate modern Android development best practices and advanced networking concepts:
 
@@ -40,32 +40,32 @@ This project was built not just to function, but to demonstrate modern Android d
 
 ---
 
-## ✨ Core Features
+## Core Features
 
-### 🌐 Advanced Network Control
+### Advanced Network Control
 * **App Gate (Per-App Firewall)**: Granularly block or allow Wi-Fi and Mobile Data for individual applications. Includes an aggressive "Screen-Off" blocking mode to prevent background data leakage.
 * **Web Gate (DNS Sinkhole)**: Intercepts DNS queries to block malicious domains, trackers, and intrusive ads before the connection is ever made. Automatically enforces Safe Search.
 * **DNS Privacy Guard**: Actively prevents applications from bypassing local filters via hardcoded DNS-over-HTTPS (DoH) servers.
 
-### 🚨 Active Threat Detection
+### Active Threat Detection
 * **Real-Time Threat Intel**: Cross-references connections with active threat feeds to drop packets destined for known Command & Control (C2) servers.
 * **Evil Twin & Wi-Fi Guard**: Scans wireless networks to detect duplicate or spoofed Access Points attempting to execute Man-in-the-Middle (MITM) attacks.
 * **IMSI Catcher Detection**: Monitors cellular radio states to alert the user of suspicious 2G downgrades (Stingray attacks).
 * **Certificate Auditor**: Analyzes the device's Trust Store for rogue or expired CA certificates.
 
-### 🕵️ Privacy Enforcement
+### Privacy Enforcement
 * **Exfiltration Detection**: Employs Shannon entropy analysis on DNS queries to detect hidden data exfiltration tunnels.
 * **Permission Auditor**: Scores installed applications based on their requested sensitive permissions and background behaviors.
 * **Hardware Alerts**: Triggers notifications when applications silently access the camera or microphone in the background.
 
-### 📊 Forensics & Observability
+### Forensics & Observability
 * **NetWatch Dashboard**: Live, visual bandwidth tracking and per-application connection logs utilizing Vico Charts.
 * **GeoIP Resolution**: Maps IP addresses to their origin countries using local MaxMind databases.
 * **PCAP Export**: Capture and export raw network traffic packets for deep analysis.
 
 ---
 
-## 🏗️ System Architecture
+## System Architecture
 
 GateKeeper is structured into distinct, scalable layers ensuring separation of concerns:
 
@@ -106,7 +106,7 @@ graph TD
 
 ---
 
-## 🎨 UI & UX Design
+## UI & UX Design
 
 <div align="center">
   <table>
@@ -136,7 +136,7 @@ graph TD
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 * **Language**: Kotlin 2.1
 * **UI**: Jetpack Compose (Material 3), Vico Charts
@@ -149,7 +149,7 @@ graph TD
 
 ---
 
-## ⚙️ Getting Started
+## Getting Started
 
 To explore the codebase or run the application locally:
 
