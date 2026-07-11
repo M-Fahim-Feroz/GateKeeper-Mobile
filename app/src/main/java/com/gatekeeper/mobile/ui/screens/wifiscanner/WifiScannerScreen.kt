@@ -225,12 +225,14 @@ fun DeviceItem(result: WifiNetworkInfo) {
     val badgeText = when {
         result.isEvilTwin   -> "Evil Twin"
         result.isSuspicious -> "Suspicious"
+        result.hasCaptivePortal -> "Captive Portal"
         result.securityType == "OPEN" -> "No Password"
         else                -> "Secure"
     }
     val badgeColor = when {
         result.isEvilTwin   -> LocalGKColors.current.accentRed
         result.isSuspicious -> LocalGKColors.current.accentOrange
+        result.hasCaptivePortal -> LocalGKColors.current.accentOrange
         result.securityType == "OPEN" -> LocalGKColors.current.accentRed
         else                -> LocalGKColors.current.accentGreen
     }

@@ -8,7 +8,7 @@
 
 ## 🌟 Overview
 
-GateKeeper Mobile is the mobile counterpart of the GateKeeper Security Suite. Designed with a modern **Jetpack Compose** interface, it utilizes Android's `VpnService` to provide system-wide network protection without requiring root access.
+GateKeeper Mobile is a comprehensive, standalone security suite for Android. Designed with a modern **Jetpack Compose** interface, it utilizes Android's `VpnService` to provide system-wide network protection without requiring root access.
 
 ## ✨ Key Features
 
@@ -83,12 +83,9 @@ For detailed tool versions and environment setups, please refer to [REQUIREMENTS
 
 ---
 
-## 🔗 Ecosystem Integration
+## 🔗 Standalone Protection
 
-GateKeeper Mobile is one piece of the larger **GateKeeper Security Suite FYP**. 
-
-The firewall, DNS, and traffic logging work entirely on-device, providing robust and independent protection.
-* **Desktop Application**: The rules and activity logs can optionally be synchronized and viewed on the desktop React frontend.
+GateKeeper Mobile is a fully self-contained application. All features including the firewall, DNS sinkhole, and traffic logging work entirely on-device, providing robust and independent protection without relying on any external desktop application or cloud synchronization.
 
 ---
 

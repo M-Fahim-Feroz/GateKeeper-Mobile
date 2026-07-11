@@ -100,5 +100,6 @@ data class WifiNetworkInfo(
     val signalLevel: Int = 0,   // 0-4 bars
     val isEvilTwin: Boolean = false,
     val isSuspicious: Boolean = false,
+    val hasCaptivePortal: Boolean = false,
     val vendorName: String? = null
 )

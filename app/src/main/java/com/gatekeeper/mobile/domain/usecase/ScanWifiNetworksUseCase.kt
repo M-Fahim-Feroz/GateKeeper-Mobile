@@ -35,6 +35,8 @@ class ScanWifiNetworksUseCase @Inject constructor(
             // Raised threshold from -50 to -65 dBm to reduce false positives
             val isSuspicious = !isEvilTwin && knownForSsid == null && result.level > -65
 
+            val isCaptivePortal = securityType == "OPEN" && result.capabilities.contains("ESS") && (result.SSID.contains("guest", true) || result.SSID.contains("free", true) || result.SSID.contains("wifi", true))
+
             WifiNetworkInfo(
                 ssid = result.SSID.ifBlank { "(Hidden Network)" },
                 bssid = result.BSSID,
@@ -52,6 +54,7 @@ class ScanWifiNetworksUseCase @Inject constructor(
                 },
                 isEvilTwin = isEvilTwin,
                 isSuspicious = isSuspicious,
+                hasCaptivePortal = isCaptivePortal,
                 vendorName = getVendorFromBssid(result.BSSID)
             )
         }.sortedWith(

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -57,6 +58,7 @@ fun SettingsScreen(
     var showEvilTwinInfo by remember { mutableStateOf(false) }
     var showVpnAutoStartInfo by remember { mutableStateOf(false) }
     var showSafeSearchInfo by remember { mutableStateOf(false) }
+
 
     Column(
         modifier = Modifier
@@ -212,6 +214,7 @@ fun SettingsScreen(
             onDismiss = { showSafeSearchInfo = false }
         )
     }
+
 }
 
 @Composable
