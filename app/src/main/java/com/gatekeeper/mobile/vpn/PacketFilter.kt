@@ -98,7 +98,7 @@ class PacketFilter {
                     packet.short // Skip Src port
                     dstPort = packet.short.toInt() and 0xFFFF // Dst port
                     // F15: Detect DNS-over-HTTPS leak (TCP 443 to known DoH providers)
-                    if (dstPort == 443 && dohProviderIps.contains(dstIp)) {
+                    if (blockDnsLeak && dstPort == 443 && dohProviderIps.contains(dstIp)) {
                         return PacketVerdict.DNS_LEAK
                     }
                     

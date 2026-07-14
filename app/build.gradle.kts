@@ -121,3 +121,9 @@ dependencies {
     debugImplementation(libs.compose.ui.test.manifest)
     androidTestImplementation(libs.espresso)
 }
+
+tasks.withType<Test> {
+    useJUnitPlatform()
+}
+
+dependencies { testRuntimeOnly("org.junit.platform:junit-platform-launcher") }
