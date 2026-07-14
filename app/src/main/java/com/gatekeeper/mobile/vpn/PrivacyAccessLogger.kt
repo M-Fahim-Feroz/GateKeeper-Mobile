@@ -39,16 +39,24 @@ class PrivacyAccessLogger @Inject constructor(
     // Key: "$packageName|$opName", Value: lastAccessTime
     private val lastSeenTimestamps = ConcurrentHashMap<String, Long>()
 
+    @Volatile
+    var isAlertsEnabled: Boolean = false
+
     private val scope = CoroutineScope(Dispatchers.IO)
 
     /** Returns true if the user has granted Usage Access (PACKAGE_USAGE_STATS) via Settings. */
+    @android.annotation.SuppressLint("NewApi")
     fun hasUsageStatsPermission(): Boolean {
-        val mode = appOpsManager.unsafeCheckOpNoThrow(
-            AppOpsManager.OPSTR_GET_USAGE_STATS,
-            android.os.Process.myUid(),
-            context.packageName
-        )
-        return mode == AppOpsManager.MODE_ALLOWED
+        return try {
+            val mode = appOpsManager.unsafeCheckOpNoThrow(
+                AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(),
+                context.packageName
+            )
+            mode == AppOpsManager.MODE_ALLOWED
+        } catch (e: SecurityException) {
+            false
+        }
     }
 
     // Lazily initialised only when start() is called on Q+, to avoid class-verification
@@ -303,7 +311,7 @@ class PrivacyAccessLogger @Inject constructor(
                         lastSeenTimestamps[sessionKey] = lastAccessTime
                         writtenAny = true
 
-                        if (isBackground) {
+                        if (isBackground && isAlertsEnabled) {
                             notificationManager.sendTrafficAlert(
                                 title = "\uD83D\uDEA8 Background Sensor Access",
                                 message = "$appName used your $sensorType in the background.",
@@ -374,7 +382,7 @@ class PrivacyAccessLogger @Inject constructor(
             activeSessions[sessionKey] = Pair(logId, System.currentTimeMillis())
             Log.d(TAG, "Access started: $appName -> $sensorType")
 
-            if (isBackground) {
+            if (isBackground && isAlertsEnabled) {
                 notificationManager.sendTrafficAlert(
                     title = "📷 Background Sensor Access",
                     message = "$appName is using your $sensorType in the background.",

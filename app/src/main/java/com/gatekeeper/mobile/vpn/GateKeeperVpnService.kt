@@ -249,6 +249,7 @@ class GateKeeperVpnService : VpnService() {
                 tcpRelayHandler?.cleanup()
             }
 
+            @android.annotation.SuppressLint("NewApi")
             override fun onCapabilitiesChanged(network: android.net.Network, nc: android.net.NetworkCapabilities) {
                 if (nc.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI)) {
                     val wifiInfo = nc.transportInfo as? android.net.wifi.WifiInfo
@@ -342,16 +343,15 @@ class GateKeeperVpnService : VpnService() {
             }
         }
 
+        // Start PrivacyAccessLogger to collect data
+        privacyAccessLogger.start()
+        Log.i(TAG, "Privacy Access Logger started for data collection")
+
         // Observe Background Sensor Alerts state
         serviceScope.launch {
             settingsRepository.backgroundSensorAlertsFlow.collect { enabled ->
-                if (enabled) {
-                    privacyAccessLogger.start()
-                    Log.i(TAG, "Background sensor alerts started")
-                } else {
-                    privacyAccessLogger.stop()
-                    Log.i(TAG, "Background sensor alerts stopped")
-                }
+                privacyAccessLogger.isAlertsEnabled = enabled
+                Log.i(TAG, "Background sensor alerts set to: $enabled")
             }
         }
         
@@ -815,3 +815,4 @@ class GateKeeperVpnService : VpnService() {
         private const val NOTIF_DEDUP_MS = 10 * 60 * 1000L
     }
 }
+

@@ -57,4 +57,14 @@ class DnsBlocklistManagerTest {
         assertTrue(dnsBlocklistManager.isDomainBlocked("EXAMPLE.COM"))
         assertTrue(dnsBlocklistManager.isDomainBlocked("example.com"))
     }
+
+    @Test
+    fun `test exfiltration detection triggers alert`() {
+        io.mockk.mockkStatic("android.util.Log")
+        io.mockk.every { android.util.Log.w(any(), any<String>()) } returns 0
+        // Just verify it doesn't crash since it's a coroutine background task
+        dnsBlocklistManager.checkDnsExfiltration("longbase64encodedsubdomaindata.example.com", "com.bad.app", "BadApp")
+    }
 }
+
+

@@ -67,10 +67,11 @@ fun SettingsProtectionScreen(
             SettingsSwitch(
                 icon = Icons.Filled.BugReport,
                 title = "Bypass attempt detector",
-                subtitle = "Alerts you if a blocked app tries to connect using a hardcoded server address",
-                tint = LocalGKColors.current.accentRed,
+                subtitle = "Alerts you if a blocked app tries to connect using a hardcoded server address. [Unavailable in this build]",
+                tint = LocalGKColors.current.textSecondary,
                 checked = isFirewallBypassDetectEnabled,
-                onCheckedChange = { viewModel.setFirewallBypassDetect(it) }
+                onCheckedChange = { viewModel.setFirewallBypassDetect(it) },
+                enabled = false
             )
             SettingsDivider()
             SettingsItem(
@@ -91,6 +92,7 @@ fun SettingsProtectionScreen(
 
 // ─── Sub-page: Privacy ───────────────────────────────────────────────────────
 
+@android.annotation.SuppressLint("NewApi")
 @Composable
 fun SettingsPrivacyScreen(
     navController: NavController,

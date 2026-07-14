@@ -96,4 +96,41 @@ class PacketFilterTest {
         val verdict = packetFilter.filter(packet, uid = 2000)
         assertEquals(PacketVerdict.ALLOW, verdict) // TCP returns ALLOW
     }
+
+    @Test
+    fun `test screen off allow when global screen off is disabled but uid is blocked`() {
+        packetFilter.updateScreenOffBlockedUids(setOf(1000))
+        packetFilter.isScreenOff = false
+        
+        val packet = buildPacket(protocol = 6, dstPort = 80)
+        val verdict = packetFilter.filter(packet, uid = 1000)
+        assertEquals(PacketVerdict.ALLOW, verdict)
+    }
+
+    @Test
+    fun `test scheduled blocking active`() {
+        packetFilter.updateScheduledBlockedUids(mapOf(1000 to PacketFilter.Schedule(0, 1440))) // all day
+        val packet = buildPacket(protocol = 6, dstPort = 80)
+        val verdict = packetFilter.filter(packet, uid = 1000)
+        assertEquals(PacketVerdict.DROP, verdict)
+    }
+
+    @Test
+    fun `test IPv6 handling`() {
+        val buffer = ByteBuffer.allocate(64)
+        buffer.put(0, 0x60.toByte()) // IPv6
+        // Next Header TCP
+        buffer.put(6, 6.toByte())
+        // Dst port 
+        buffer.putShort(42, 80.toShort())
+        buffer.position(0)
+        buffer.limit(64)
+
+        packetFilter.updateScreenOffBlockedUids(setOf(1000))
+        packetFilter.isScreenOff = true
+
+        val verdict = packetFilter.filter(buffer, uid = 1000)
+        assertEquals(PacketVerdict.DROP, verdict)
+    }
 }
+

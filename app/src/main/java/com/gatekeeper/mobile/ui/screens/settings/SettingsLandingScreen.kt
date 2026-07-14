@@ -34,7 +34,7 @@ fun SettingsLandingScreen(
 ) {
     val isScreenOffBlockingEnabled by viewModel.isScreenOffBlockingEnabled.collectAsState()
     val isDnsLeakProtectionEnabled by viewModel.isDnsLeakProtectionEnabled.collectAsState()
-    val isFirewallBypassDetectEnabled by viewModel.isFirewallBypassDetectEnabled.collectAsState()
+    val isSafeSearchEnabled by viewModel.isSafeSearchEnabled.collectAsState()
     val isDnsExfilDetectionEnabled by viewModel.isDnsExfilDetectionEnabled.collectAsState()
     
     var desktopIp by remember { mutableStateOf("192.168.1.100") }
@@ -87,8 +87,8 @@ fun SettingsLandingScreen(
                 SettingsRowSwitch(
                     title = "SafeSearch",
                     subtitle = "Filter malicious domains at the network level.",
-                    checked = isFirewallBypassDetectEnabled,
-                    onCheckedChange = { viewModel.setFirewallBypassDetect(it) }
+                    checked = isSafeSearchEnabled,
+                    onCheckedChange = { viewModel.setSafeSearchEnabled(it) }
                 )
             }
 

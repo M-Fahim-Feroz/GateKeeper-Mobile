@@ -7,8 +7,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.yield
+import java.io.IOException
+import java.io.InputStream
+import java.io.Reader
+import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
@@ -46,6 +50,51 @@ class DnsBlocklistManager @Inject constructor(
 
     companion object {
         private const val TAG = "DnsBlocklistManager"
+        const val MAX_BYTES_LIMIT = 50L * 1024 * 1024 // 50 MB
+        const val MAX_LINE_LENGTH = 1024
+        const val MAX_DOMAINS_PER_FEED = 300_000
+        const val BATCH_SIZE = 500
+    }
+
+    private class BoundedInputStream(private val inStream: InputStream, private val maxBytes: Long) : InputStream() {
+        private var bytesRead = 0L
+        override fun read(): Int {
+            if (bytesRead >= maxBytes) throw IOException("Max downloaded-byte limit exceeded")
+            val b = inStream.read()
+            if (b != -1) bytesRead++
+            return b
+        }
+        override fun read(b: ByteArray, off: Int, len: Int): Int {
+            if (bytesRead >= maxBytes) throw IOException("Max downloaded-byte limit exceeded")
+            val maxRead = Math.min(len.toLong(), maxBytes - bytesRead).toInt()
+            val read = inStream.read(b, off, maxRead)
+            if (read != -1) bytesRead += read
+            return read
+        }
+        override fun close() {
+            inStream.close()
+        }
+    }
+
+    private suspend fun readBoundedLine(reader: Reader, maxLen: Int): String? {
+        val sb = StringBuilder()
+        while (true) {
+            yield() // Check cancellation
+            val c = reader.read()
+            if (c == -1) {
+                return if (sb.isEmpty()) null else sb.toString()
+            }
+            val ch = c.toChar()
+            if (ch == '\n') {
+                return sb.toString()
+            }
+            if (ch != '\r') {
+                sb.append(ch)
+                if (sb.length > maxLen) {
+                    throw IOException("Max line-length limit exceeded")
+                }
+            }
+        }
     }
 
     /**
@@ -134,31 +183,31 @@ class DnsBlocklistManager @Inject constructor(
      */
     suspend fun importFromUrl(urlString: String, listType: String = "blacklist", sourceName: String = urlString): Int {
         return withContext(Dispatchers.IO) {
-            val MAX_DOMAINS_PER_FEED = 300_000
-            val BATCH_SIZE = 500
-
+            var connection: HttpURLConnection? = null
             try {
                 Log.i(TAG, "Streaming blocklist from $urlString")
-                val url = URL(urlString)
-                val connection = url.openConnection()
-                connection.connectTimeout = 15_000
-                connection.readTimeout = 60_000
-
                 // Delete old entries for this source before we start importing new ones
                 dnsRepository.clearBySource(sourceName)
+
+                val url = URL(urlString)
+                connection = url.openConnection() as HttpURLConnection
+                connection.requestMethod = "GET"
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 60_000
 
                 val batch = mutableListOf<String>()
                 var totalInserted = 0
 
-                BufferedReader(InputStreamReader(connection.getInputStream())).use { reader ->
-                    var line: String?
-                    while (reader.readLine().also { line = it } != null) {
+                val boundedStream = BoundedInputStream(connection.inputStream, MAX_BYTES_LIMIT)
+                boundedStream.bufferedReader().use { reader ->
+                    while (isActive) {
+                        val line = readBoundedLine(reader, MAX_LINE_LENGTH) ?: break
+                        
                         if (totalInserted + batch.size >= MAX_DOMAINS_PER_FEED) {
-                            Log.w(TAG, "Feed cap ($MAX_DOMAINS_PER_FEED) reached for $urlString — stopping early")
-                            break
+                            throw IOException("Max imported-entry limit exceeded")
                         }
 
-                        val trimmed = line!!.trim()
+                        val trimmed = line.trim()
                         if (trimmed.isEmpty() || trimmed.startsWith("#") || trimmed.startsWith("!")) continue
 
                         // Handle "0.0.0.0 example.com" or "127.0.0.1 example.com" hosts-file format
@@ -196,9 +245,28 @@ class DnsBlocklistManager @Inject constructor(
                 // Reload in-memory set once after the full import is done
                 reloadAll()
                 totalInserted
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to import blocklist from $urlString", e)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                Log.w(TAG, "Import cancelled for $urlString, cleaning up partial data")
+                dnsRepository.clearBySource(sourceName)
                 throw e
+            } catch (e: IOException) {
+                Log.e(TAG, "Network or parsing error importing blocklist from $urlString", e)
+                dnsRepository.clearBySource(sourceName)
+                throw e
+            } catch (e: android.database.sqlite.SQLiteException) {
+                Log.e(TAG, "Database error importing blocklist from $urlString", e)
+                dnsRepository.clearBySource(sourceName)
+                throw e
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Security exception importing blocklist from $urlString", e)
+                dnsRepository.clearBySource(sourceName)
+                throw e
+            } catch (e: IllegalArgumentException) {
+                Log.e(TAG, "Invalid URL or argument importing blocklist from $urlString", e)
+                dnsRepository.clearBySource(sourceName)
+                throw e
+            } finally {
+                connection?.disconnect()
             }
         }
     }

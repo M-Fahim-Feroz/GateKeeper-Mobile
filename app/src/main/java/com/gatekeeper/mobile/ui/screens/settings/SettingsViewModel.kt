@@ -54,6 +54,9 @@ class SettingsViewModel @Inject constructor(
     val isGlobalCameraBlockEnabled: StateFlow<Boolean> = settingsRepository.globalCameraBlockFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val isSafeSearchEnabled: StateFlow<Boolean> = settingsRepository.safeSearchEnabledFlow
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     fun setPcapCaptureEnabled(enabled: Boolean) = viewModelScope.launch { settingsRepository.setCapturePcap(enabled) }
     fun setThemeMode(mode: Int) = viewModelScope.launch { settingsRepository.setThemeMode(mode) }
     fun setBackendIp(ip: String) = viewModelScope.launch { settingsRepository.setBackendIp(ip) }
@@ -65,6 +68,7 @@ class SettingsViewModel @Inject constructor(
     fun setBackgroundSensorAlerts(enabled: Boolean) = viewModelScope.launch { settingsRepository.setBackgroundSensorAlerts(enabled) }
     fun setEvilTwinDetection(enabled: Boolean) = viewModelScope.launch { settingsRepository.setEvilTwinDetection(enabled) }
     fun setGlobalCameraBlock(enabled: Boolean) = viewModelScope.launch { settingsRepository.setGlobalCameraBlock(enabled) }
+    fun setSafeSearchEnabled(enabled: Boolean) = viewModelScope.launch { settingsRepository.setSafeSearchEnabled(enabled) }
 
     suspend fun exportTrafficLogs(context: Context): Result<File> = exportUtils.exportTrafficLogsCsv(context)
     suspend fun exportRules(context: Context): Result<File> = exportUtils.exportRulesJson(context)
