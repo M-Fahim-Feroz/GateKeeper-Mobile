@@ -18,7 +18,11 @@ class ScanWifiNetworksUseCase @Inject constructor(
 ) {
     operator fun invoke(knownNetworks: List<KnownNetwork> = emptyList()): List<WifiNetworkInfo> {
         val wifiManager = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-        val scanResults = wifiManager.scanResults
+        val scanResults = if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            wifiManager.scanResults
+        } else {
+            emptyList()
+        }
 
         // Build map of SSID -> set of known BSSIDs from our DB
         val knownBssidsBySSID: Map<String, Set<String>> = knownNetworks

@@ -7,997 +7,358 @@
 
 ---
 
-## Table of Contents
-
-1. [Project Overview](#1-project-overview)
-2. [Architecture](#2-architecture)
-   - [High-Level Design](#21-high-level-design)
-   - [Package Structure](#22-package-structure)
-   - [Data Flow](#23-data-flow)
-3. [Core Engine — VPN Service](#3-core-engine--vpn-service)
-   - [GateKeeperVpnService](#31-gatekeepervpnservice)
-   - [PacketFilter](#32-packetfilter)
-   - [DnsResolver & DnsBlocklistManager](#33-dnsresolver--dnsblocklistmanager)
-   - [ConnectionTracker](#34-connectiontracker)
-   - [TrafficLogger](#35-trafficlogger)
-4. [Security Modules](#4-security-modules)
-   - [ThreatFeedManager](#41-threatfeedmanager)
-   - [RogueApDetector (Evil Twin Wi-Fi)](#42-rogueapdetector-evil-twin-wi-fi)
-   - [CellularMonitor (IMSI Catcher Detection)](#43-cellularmonitor-imsi-catcher-detection)
-   - [ExfiltrationDetector](#44-exfiltrationdetector)
-   - [CertificateAuditor](#45-certificateauditor)
-   - [PrivacyAccessLogger](#46-privacyaccesslogger)
-   - [PermissionScanner](#47-permissionscanner)
-5. [Data Layer](#5-data-layer)
-   - [Room Database Schema](#51-room-database-schema)
-   - [Repositories](#52-repositories)
-   - [DataStore Preferences](#53-datastore-preferences)
-6. [UI Layer — Screens & ViewModels](#6-ui-layer--screens--viewmodels)
-   - [Dashboard](#61-dashboard)
-   - [Firewall](#62-firewall)
-   - [DNS Filter](#63-dns-filter)
-   - [Traffic Monitor](#64-traffic-monitor)
-   - [Threat Feed](#66-threat-feed)
-   - [Wi-Fi Scanner](#67-wi-fi-scanner)
-   - [Permission Auditor](#68-permission-auditor)
-   - [Certificate Auditor](#69-certificate-auditor)
-   - [Settings](#610-settings)
-   - [Onboarding](#611-onboarding)
-7. [Navigation](#7-navigation)
-8. [Dependency Injection (Hilt)](#8-dependency-injection-hilt)
-9. [Background Components](#9-background-components)
-   - [Boot Receiver](#91-boot-receiver)
-   - [Device Admin Receiver](#92-device-admin-receiver)
-   - [Notification Manager](#93-notification-manager)
-10. [Built-In DNS Blocklists](#10-built-in-dns-blocklists)
-11. [Utilities](#11-utilities)
-12. [Permissions Reference](#12-permissions-reference)
-13. [Build Configuration](#13-build-configuration)
-14. [Database Migrations](#14-database-migrations)
-15. [Ecosystem Integration](#15-ecosystem-integration)
-16. [Development Setup](#16-development-setup)
-17. [Testing](#17-testing)
-18. [Security Features Quick-Reference](#18-security-features-quick-reference)
-
----
-
 ## 1. Project Overview
 
 **GateKeeper Mobile** is a rootless Android security application that intercepts and inspects all device network traffic using Android's `VpnService` API. It provides system-wide protection without requiring root access, combining:
 
 | Capability | Description |
 |---|---|
-| Per-App Firewall | Block specific apps from using Wi-Fi or Mobile Data |
+| Per-App Firewall | Block specific apps from using Wi-Fi or Mobile Data, with schedule support |
 | DNS Sinkhole | Block ad, tracking, and malware domains at the DNS layer |
-| Traffic Monitor | Real-time per-app bandwidth and connection logging |
+| Traffic Monitor | Real-time per-app bandwidth (BandwidthMonitor) and connection logging |
 | Threat Intelligence | IP & domain blacklists from public threat feeds |
 | Evil Twin Detection | Rogue Wi-Fi access point detection via BSSID tracking |
 | IMSI Catcher Detection | Alerts on suspicious cellular downgrade to 2G |
 | Data Exfiltration Detection | Correlates large uploads with recent sensor (mic/camera) use |
 | Certificate Auditor | Scans user-installed CA certificates for known MITM proxies |
 | Permission Auditor | Risk-scores installed apps based on declared permissions |
+| PCAP Capture | Captures and rotates full packet captures for analysis |
 
 **Platform**: Android 8.0+ (API 26+)  
-**Language**: Kotlin 2.1  
+**Language**: Kotlin 2.2.10  
 **UI**: Jetpack Compose with Material 3  
-**Architecture**: Clean Architecture + MVVM
+**Architecture**: Clean Architecture + MVVM  
+**Implementation Maturity**: Core features, database operations, and UI are fully implemented. Bidirectional packet forwarding via TCP/UDP relays is active. There are currently no automated tests in the repository.
 
 ---
 
-## 2. Architecture
-
-### 2.1 High-Level Design
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                     UI Layer (Compose)                      │
-│  Dashboard │ Firewall │ DNS │ Traffic │ Settings │ … │
-└──────────────────────┬─────────────────────────────────────┘
-                       │ ViewModel (StateFlow / Flow)
-┌──────────────────────▼─────────────────────────────────────┐
-│                  Domain Layer (Use Cases)                    │
-│  GetInstalledAppsUseCase │ ScanWifiNetworksUseCase │ …      │
-└──────────────────────┬─────────────────────────────────────┘
-                       │ Repository interfaces
-┌──────────────────────▼─────────────────────────────────────┐
-│                   Data Layer                                 │
-│  Repositories ─► Room DB  │  Repositories ─► Retrofit API  │
-│                 DataStore  │          GeoIP (MaxMind)       │
-└──────────────────────┬─────────────────────────────────────┘
-                       │ Inject into VPN service
-┌──────────────────────▼─────────────────────────────────────┐
-│             Core VPN Engine (GateKeeperVpnService)          │
-│  TUN Interface ─► PacketFilter ─► DnsResolver               │
-│                ─► ConnectionTracker ─► TrafficLogger        │
-│                ─► ThreatFeedManager                        │
-└────────────────────────────────────────────────────────────┘
-```
-
-The VPN service and UI layer both run in the same process; the service exposes static `StateFlow` objects that the Compose UI observes directly for live updates.
-
-### 2.2 Package Structure
+## 2. Current Project Structure
 
 ```
 com.gatekeeper.mobile/
-│
-├── GateKeeperApp.kt              # Application class — Hilt entry point, notification channels
-│
-├── vpn/                          # Core VPN engine
-│   ├── GateKeeperVpnService.kt   # TUN interface, packet loop, orchestration
-│   ├── PacketFilter.kt           # Stateless packet inspection (IPv4/IPv6)
-│   ├── DnsResolver.kt            # DNS query parsing & response crafting
-│   ├── DnsBlocklistManager.kt    # In-memory blocklist, DNS exfiltration detection
-│   ├── ConnectionTracker.kt      # 5-tuple connection tracking, UID mapping
-│   ├── TrafficLogger.kt          # Per-app bandwidth aggregation → Room
-│   ├── ThreatFeedManager.kt      # Downloads & imports IP/domain threat feeds
-│   ├── RogueApDetector.kt        # Evil Twin Wi-Fi detection
-│   ├── CellularMonitor.kt        # IMSI catcher / 2G downgrade detection
-│   ├── ExfiltrationDetector.kt   # Correlates sensor use + large uploads
-│   ├── CertificateAuditor.kt     # Scans AndroidCAStore for risky user certs
-│   ├── PrivacyAccessLogger.kt    # Tracks mic/camera sensor access
-│   ├── PermissionScanner.kt      # Risk-scores app permissions
-│   ├── WifiScanner.kt            # Reads current Wi-Fi connection info
-│   ├── GeoIpResolver.kt          # MaxMind GeoLite2 country lookup
-│   ├── NetworkUtils.kt           # Low-level IP byte utilities
-│   ├── PcapWriter.kt             # PCAP capture file writer (F18)
-│   └── ExportUtils.kt            # CSV/JSON log export helpers
-│
+├── GateKeeperApp.kt              # Hilt entry point, notification channels
+├── di/                           # Dependency Injection (AppModule.kt)
 ├── data/
 │   ├── db/
-│   │   ├── AppDatabase.kt        # Room database definition (v8)
-│   │   ├── dao/                  # Data Access Objects (9 DAOs)
-│   │   └── entity/               # Room entities (9 tables)
+│   │   ├── AppDatabase.kt        # Room database (v12) and Migrations
+│   │   ├── dao/                  # 9 DAOs
+│   │   └── entity/               # 9 Entities
 │   ├── model/
-│   │   └── BuiltInBlocklists.kt  # Hardcoded curated blocklist URLs
-│   └── repository/               # Repository implementations (8 repositories)
-│
+│   │   └── BuiltInBlocklists.kt  # Hardcoded feeds
+│   ├── remote/                   # Retrofit API
+│   └── repository/               # Repositories including DataStore settings
 ├── domain/
-│   ├── model/Models.kt           # Clean domain models (InstalledApp, ChatMessage, …)
-│   └── usecase/                  # Use case classes (3)
-│
-├── di/
-│   └── AppModule.kt              # Hilt @Module for DB, Retrofit, DAOs
-│
+│   ├── model/                    # Domain models
+│   └── usecase/                  # Use cases (e.g. ScanWifiNetworksUseCase)
 ├── notifications/
-│   └── GKNotificationManager.kt  # Notification helpers for VPN & alerts
-│
+│   └── GKNotificationManager.kt  # Helper for VPN & Alert notifications
 ├── receiver/
-│   ├── BootReceiver.kt           # Auto-start VPN on device boot
-│   └── GateKeeperDeviceAdminReceiver.kt  # Device admin for hardware-level controls
-│
-└── ui/
-    ├── MainActivity.kt           # Single-activity host
-    ├── navigation/
-    │   ├── Screen.kt             # Sealed class of all navigation destinations
-    │   └── AppNavigation.kt      # NavHost & bottom navigation setup
-    ├── screens/                  # Feature screens (Screen + ViewModel pairs)
-    │   ├── dashboard/
-    │   ├── firewall/
-    │   ├── dns/
-    │   ├── traffic/
-    │   ├── threats/
-    │   ├── wifiscanner/
-    │   ├── permissionauditor/
-    │   ├── certaudit/
-    │   ├── settings/
-    │   └── onboarding/
-    ├── components/               # Reusable Compose components
-    │   ├── Components.kt
-    │   └── GKComponents.kt
-    └── theme/
-        ├── Color.kt
-        ├── Theme.kt
-        ├── Typography.kt
-        └── Glassmorphism.kt
-```
-
-### 2.3 Data Flow
-
-#### Packet Lifecycle (Outbound)
-
-```
-App sends IP packet
-      │
-      ▼
-TUN interface fd (read loop in GateKeeperVpnService)
-      │
-      ▼
-ConnectionTracker.track()  ──► UID mapping via ConnectivityManager (API 29+)
-      │
-      ▼
-PacketFilter.filter()
-      ├── PacketVerdict.DROP          → packet silently discarded
-      ├── PacketVerdict.DNS_SINKHOLE  → immediate 0.0.0.0 response synthesised
-      ├── PacketVerdict.DNS_INTERCEPT → DnsResolver.handleQuery()
-      │       ├── domain blocked?  → NXDOMAIN / 0.0.0.0 response
-      │       └── domain allowed?  → forward to system DNS, log result
-      ├── PacketVerdict.DNS_LEAK      → packet dropped (DoH bypass)
-      └── PacketVerdict.ALLOW        → forward via protect()'ed socket
-                                         │
-                                         ▼
-                                     TrafficLogger.log()
-                                     ExfiltrationDetector.analyzeTraffic()
+│   ├── BootReceiver.kt           # Auto-starts VPN
+│   └── GateKeeperDeviceAdminReceiver.kt # Device Admin capabilities
+├── ui/
+│   ├── MainActivity.kt           
+│   ├── navigation/               # AppNavigation.kt, Screen.kt
+│   ├── screens/                  
+│   │   ├── alerts/               # Unresolved and historical security alerts
+│   │   ├── certaudit/            
+│   │   ├── dashboard/            # Main landing screen
+│   │   ├── dns/                  
+│   │   ├── firewall/             
+│   │   ├── onboarding/           
+│   │   ├── permissionauditor/    
+│   │   ├── protecthub/           # Central hub for protection modules
+│   │   ├── settings/             
+│   │   ├── threats/              
+│   │   ├── traffic/              
+│   │   └── wifiscanner/          
+│   ├── components/               
+│   └── theme/                    
+├── util/                         
+│   ├── GeoIpLookup.kt            
+│   └── NetworkUtils.kt           
+└── vpn/                          # Core VPN Engine
+    ├── GateKeeperVpnService.kt   # TUN interface orchestrator
+    ├── PacketFilter.kt           
+    ├── DnsResolver.kt            
+    ├── DnsBlocklistManager.kt    
+    ├── ConnectionTracker.kt      
+    ├── TrafficLogger.kt          
+    ├── BandwidthMonitor.kt       # Live traffic speed aggregator
+    ├── ThreatFeedManager.kt      
+    ├── RogueApDetector.kt        
+    ├── CellularMonitor.kt        
+    ├── ExfiltrationDetector.kt   
+    ├── CertificateAuditor.kt     
+    ├── PrivacyAccessLogger.kt    
+    ├── PermissionScanner.kt      
+    ├── WifiScanner.kt            
+    ├── GeoIpResolver.kt          
+    ├── NetworkUtils.kt           
+    ├── NetworkAttributionMapper.kt 
+    ├── PcapWriter.kt             
+    ├── ExportUtils.kt            
+    ├── TlsSniExtractor.kt        
+    └── relay/                    # Bidirectional Forwarding
+        ├── TcpRelayHandler.kt    
+        ├── TcpSession.kt         
+        └── UdpRelayHandler.kt    
 ```
 
 ---
 
-## 3. Core Engine — VPN Service
+## 3. Architecture
 
-### 3.1 GateKeeperVpnService
+### 3.1 High-Level Design
 
-**File**: `vpn/GateKeeperVpnService.kt`  
-**Base class**: `android.net.VpnService`  
-**Injection**: `@AndroidEntryPoint` (Hilt)
+The app uses a single-activity architecture (`MainActivity`) with Jetpack Compose.
+- **UI Layer**: Compose screens paired with `@HiltViewModel`s.
+- **Domain Layer**: Clean Architecture UseCases for encapsulating complex logic (e.g., getting apps, scanning Wi-Fi).
+- **Data Layer**: Room Database for relational data, DataStore for key-value preferences, Retrofit for network calls.
+- **Core Engine (VPN Service)**: Runs in the same process. It exposes state via `StateFlow`s for direct consumption by the UI, bypassing traditional repositories for high-frequency updates (e.g., live bandwidth).
 
-The service is the central orchestrator of all real-time security functions.
+### 3.2 Packet Forwarding Architecture
+Unlike simpler DNS-only VPNs, GateKeeper implements **Bidirectional Forwarding** for apps explicitly blocked or inspected. 
+1. `PacketFilter` determines verdicts (`ALLOW`, `DROP`, `DNS_SINKHOLE`, `DNS_INTERCEPT`, `DNS_LEAK`).
+2. `GateKeeperVpnService` routes `ALLOW` IPv4 packets to `TcpRelayHandler` (TCP) or `UdpRelayHandler` (UDP) in `vpn/relay/`.
+3. These relays map sockets to standard Android sockets via `VpnService.protect()`, enabling full traffic interception and forwarding without root.
 
-#### Lifecycle
+---
 
-| Phase | What Happens |
-|---|---|
-| `onStartCommand(ACTION_START)` | Requests VPN permission, creates TUN interface, starts packet loop coroutine, registers screen-state broadcast receiver, starts cellular monitor, connects Wi-Fi rogue AP checker |
-| `onStartCommand(ACTION_STOP)` | Cancels all coroutines, closes TUN fd, unregisters receivers |
-| `onRevoke()` | Called by Android if user revokes VPN permission; stops cleanly |
+## 4. Build Configuration
 
-#### TUN Interface Setup
+Based on actual `app/build.gradle.kts` and `gradle/libs.versions.toml`:
 
-The service builds a `VpnService.Builder` that:
-- Assigns the virtual IP `10.0.0.2/32` to the device.
-- Routes all traffic (`0.0.0.0/0`, `::/0`) through the tunnel.
-- Sets the DNS server to `10.0.0.1` so all DNS queries are intercepted locally.
-- Uses an MTU of 32767.
-- Excludes its own package from the VPN to avoid routing loops.
+* **Namespace**: `com.gatekeeper.mobile`
+* **Application ID**: `com.gatekeeper.mobile` (Debug: `com.gatekeeper.mobile.debug`)
+* **Version Code**: 1
+* **Version Name**: 1.0.0
+* **Minimum SDK**: 26 (Android 8.0)
+* **Target SDK**: 35 (Android 15)
+* **Compile SDK**: 35 (Android 15)
+* **Kotlin Version**: 2.2.10
+* **Android Gradle Plugin (AGP)**: 9.2.0
+* **Gradle Version**: 9.4.1 (from wrapper)
+* **Java Version**: 17
+* **Build Features**: Compose, BuildConfig
 
-#### Packet Loop
+---
 
-Runs on a `Dispatchers.IO` coroutine. Each iteration:
-1. Reads one IP packet from the TUN `FileInputStream` into a `ByteBuffer`.
-2. Calls `ConnectionTracker.track()` to identify the owning UID.
-3. Calls `PacketFilter.filter()` to get a verdict.
-4. Acts on the verdict (drop, sinkhole, intercept DNS, or forward).
-5. For forwarded packets, writes to the upstream `FileOutputStream`.
+## 5. Dependencies
 
-#### Static State Flows (observed by UI)
+Major direct dependencies based on `libs.versions.toml`:
 
-| Property | Type | Description |
+* **Jetpack Compose BOM**: `2024.12.01`
+* **Room**: `2.6.1`
+* **Hilt**: `2.59.2`
+* **Retrofit**: `2.11.0`
+* **OkHttp**: `4.12.0`
+* **Coroutines**: `1.9.0`
+* **Navigation Compose**: `2.8.5`
+* **Lifecycle**: `2.8.7`
+* **DataStore**: `1.1.1`
+* **Coil**: `2.7.0`
+* **Vico Charts**: `2.0.0-beta.2`
+* **MaxMind GeoIP2**: `4.2.0`
+* **Gson**: `2.11.0`
+
+---
+
+## 6. Android Manifest and Permissions
+
+Declared in `AndroidManifest.xml`. 
+
+| Permission | Purpose | Notes |
 |---|---|---|
-| `isRunning` | `StateFlow<Boolean>` | Whether the VPN tunnel is active |
-| `blockedCount` | `StateFlow<Long>` | Running total of blocked packets |
-| `dnsBlockedCount` | `StateFlow<Long>` | Running total of sinkhol'd DNS queries |
+| `INTERNET` | General network access & VPN relay | |
+| `ACCESS_NETWORK_STATE` | Monitor active connections | |
+| `ACCESS_WIFI_STATE` | Check Wi-Fi properties | |
+| `CHANGE_NETWORK_STATE` | Network listener triggers | |
+| `ACCESS_FINE_LOCATION` / `ACCESS_COARSE_LOCATION` | Required for Wi-Fi scanning on older Android | |
+| `NEARBY_WIFI_DEVICES` | Wi-Fi scanning (API 33+) | Flagged `neverForLocation` |
+| `FOREGROUND_SERVICE` | Persist VPN Service | |
+| `FOREGROUND_SERVICE_SPECIAL_USE` | VPN categorisation (API 34+) | |
+| `POST_NOTIFICATIONS` | Alerts and VPN ongoing notification | |
+| `QUERY_ALL_PACKAGES` | Enumerate apps for Firewall | Requires Google Play declaration |
+| `WATCH_APPOPS` | Track Mic/Camera access | Requires ADB grant (`pm grant`) |
+| `PACKAGE_USAGE_STATS` | Usage data for sensor logging | User grants via System Settings |
+| `RECEIVE_BOOT_COMPLETED` | Auto-start VPN on boot | |
+| `READ_PHONE_STATE` | IMSI catcher / cellular downgrade detection | |
 
-#### Supported Actions (Intent)
-
-| Action constant | Effect |
-|---|---|
-| `ACTION_START` | Start the VPN |
-| `ACTION_STOP` | Stop the VPN |
-| `ACTION_REBUILD` | Rebuild the TUN interface (re-apply updated firewall rules) |
-| `ACTION_START_PCAP` | Begin PCAP capture to file |
-| `ACTION_STOP_PCAP` | Stop PCAP capture |
-
----
-
-### 3.2 PacketFilter
-
-**File**: `vpn/PacketFilter.kt`
-
-A stateless (except for its rule sets) packet inspector. Runs on the packet-loop thread, so all operations must be non-blocking.
-
-#### Verdict Enum
-
-| Verdict | Meaning |
-|---|---|
-| `ALLOW` | Forward packet normally |
-| `DROP` | Silently discard |
-| `DNS_INTERCEPT` | DNS query from allowed app — handle locally |
-| `DNS_SINKHOLE` | DNS query from blocked app — return 0.0.0.0 instantly |
-| `DNS_LEAK` | App is connecting to a DoH provider on port 443 — drop |
-
-#### Rule Sets (mutable, updated atomically)
-
-| Method | Description |
-|---|---|
-| `updateBlockedUids(Set<Int>)` | Replace the set of blocked app UIDs |
-| `updateBlockedIps(Set<String>)` | Replace the set of blocked destination IPs |
-| `updateBlockedPorts(Set<Int>)` | Replace the set of blocked destination ports |
-| `updateScreenOffBlockedUids(Set<Int>)` | UIDs that are additionally blocked when the screen is off |
-
-#### Protocol Support
-
-- **IPv4**: Full parsing of IHL, protocol, source/destination IPs, source/destination ports for TCP and UDP.
-- **IPv6**: Fixed 40-byte header parsing with next-header field; supports TCP (6) and UDP (17).
-
-#### DNS-over-HTTPS (DoH) Bypass Detection
-
-Connections to TCP port 443 targeting well-known DoH resolvers (Google `8.8.8.8`, Cloudflare `1.1.1.1`, Quad9 `9.9.9.9`, OpenDNS) return `DNS_LEAK` and are dropped when `blockDnsLeak` is `true`.
+* **Services**: `GateKeeperVpnService` (binds `android.net.VpnService`, handles traffic).
+* **Receivers**: `BootReceiver` (boot trigger), `GateKeeperDeviceAdminReceiver` (device admin).
+* **Activities**: `MainActivity` (single activity host).
 
 ---
 
-### 3.3 DnsResolver & DnsBlocklistManager
+## 7. Navigation and Screens
 
-**Files**: `vpn/DnsResolver.kt`, `vpn/DnsBlocklistManager.kt`
+Defined in `ui/navigation/Screen.kt` and implemented across `ui/screens`.
 
-#### DnsResolver
-
-Parses raw DNS UDP payloads and synthesises responses:
-- **Allowed domain**: Forwards query to the system's upstream DNS server, returns the real answer, and registers resolved IPs in `DnsBlocklistManager.recentDnsResolutions` for bypass detection.
-- **Blocked domain**: Returns a crafted DNS response with `0.0.0.0` (IPv4) or `::` (IPv6), preventing the OS from caching a real IP and bypassing the filter.
-
-#### DnsBlocklistManager
-
-Manages three in-memory concurrent structures:
-
-| Structure | Purpose |
-|---|---|
-| `blacklistedDomains` (`ConcurrentHashSet`) | Blocked domains (user rules + threat feed domains) |
-| `whitelistedDomains` (`ConcurrentHashSet`) | Explicitly allowed domains (take priority over blacklist) |
-| `recentDnsResolutions` (`ConcurrentHashMap<IP, timestamp>`) | Recently resolved IPs for hardcoded-IP bypass detection (F14) |
-
-**Live sync**: `observeAndSync()` is called from within the VPN service coroutine scope. It permanently collects two Room `Flow` streams (blacklist, whitelist) so that any user rule change in the UI is reflected in the VPN within milliseconds without a restart.
-
-**Domain matching**: Both exact match and suffix match are supported — blocking `facebook.com` also blocks `api.facebook.com`, `static.xx.fbcdn.net`, etc.
-
-**DNS Exfiltration Detection** (`checkDnsExfiltration()`):
-Checks every resolved domain for three heuristic signals:
-1. Subdomain length > 40 characters (likely base64-encoded stolen data).
-2. Shannon entropy > 3.5 with subdomain length > 10 (randomly-looking subdomain = DNS tunnel).
-3. Query rate > 20/minute to the same base domain (DNS tunnelling activity).
-
-Triggers a `SecurityAlert` of type `DNS_EXFILTRATION` with severity `HIGH`.
-
-**Blocklist import** (`importFromUrl()`): Downloads a hosts-file or plain-domain-list from any URL, parses it (handles `0.0.0.0 domain` and `127.0.0.1 domain` formats), batch-inserts up to 5,000 domains at a time into Room, then reloads the in-memory set.
-
----
-
-### 3.4 ConnectionTracker
-
-**File**: `vpn/ConnectionTracker.kt`
-
-Maintains a live map of active network connections keyed by 5-tuple (`protocol:srcIP:srcPort-dstIP:dstPort`).
-
-#### UID Mapping
-
-On Android 10+ (API 29), `ConnectivityManager.getConnectionOwnerUid()` maps a TCP/UDP socket to the Android UID of the owning app. UID→app name lookups are cached in `uidAppCache` to avoid repeated `PackageManager` calls on the hot path.
-
-#### Idle Connection Cleanup
-
-`sweepIdle(idleThresholdMs)` is called every 5 seconds from the reporting loop to remove connections with zero data transfer older than the threshold (default 5 minutes).
-
-#### Country Classification
-
-`classifyIpRegion()` performs a fast local classification (RFC 1918 private → "Local Network", everything else → "Internet") without any network call to avoid ANR risks. Full GeoIP country lookup is delegated to `GeoIpResolver`.
-
----
-
-### 3.5 TrafficLogger
-
-**File**: `vpn/TrafficLogger.kt`
-
-Aggregates per-app bandwidth statistics and periodically flushes them to `ConnectionLog` Room entities. It:
-- Accumulates `bytesIn` / `bytesOut` per (packageName, remoteIp) tuple.
-- Invokes `ExfiltrationDetector.analyzeTraffic()` for every recorded outbound flow.
-- Performs GeoIP country lookup via `GeoIpResolver` for each new destination IP.
-
----
-
-## 4. Security Modules
-
-### 4.1 ThreatFeedManager
-
-**File**: `vpn/ThreatFeedManager.kt`
-
-Downloads and imports threat intelligence feeds from public URLs. Each feed entry is stored as a `ThreatFeedEntry` in Room with the indicator (IP or domain), indicator type, feed source URL, feed name, and threat type. Batch inserts of 5,000 entries prevent memory pressure. On completion, `DnsBlocklistManager.reloadAll()` is triggered to include the new threat domains in the active blocklist.
-
----
-
-### 4.2 RogueApDetector (Evil Twin Wi-Fi)
-
-**File**: `vpn/RogueApDetector.kt`
-
-Detects evil twin access points by comparing the current Wi-Fi BSSID (router hardware address) against previously seen BSSIDs for the same SSID stored in the `known_networks` Room table.
-
-| Result | Condition | Action |
+| Route | UI Component | Description |
 |---|---|---|
-| `SAFE` | SSID never seen before (and secured) OR BSSID is known | None |
-| `OPEN_NETWORK` | New SSID with no password (WEP/OPEN) | Warning level alert |
-| `EVIL_TWIN` | Known SSID but BSSID is unknown | `CRITICAL` SecurityAlert + push notification |
-
-Every successful connection updates/inserts the network record in Room so the trusted BSSID set grows over time.
-
----
-
-### 4.3 CellularMonitor (IMSI Catcher Detection)
-
-**File**: `vpn/CellularMonitor.kt`
-
-Registers a `TelephonyCallback` (API 31+) or `PhoneStateListener` (API 26-30) to listen for data connection type changes. When the network degrades from any higher generation to **2G**, it fires a `CRITICAL` security alert titled *"Cellular Downgrade to 2G Detected"* explaining the IMSI catcher / Stingray threat model.
-
-Alert de-duplication: `alertedForDowngrade` flag prevents repeated alerts for the same 2G episode. The flag resets when the network upgrades back to 3G/4G/5G.
+| `dashboard` | `DashboardScreen` | Main landing. Shows VPN status, summary metrics, recent alerts. |
+| `protect_hub` | `ProtectHubScreen` | Sub-navigation hub for Firewall, DNS, and Threat features. |
+| `alerts` | `AlertsScreen` | Dedicated list of all historical and active security alerts. |
+| `settings` | `SettingsScreen` | App configuration, VPN behavior, and data management. |
+| `firewall` | `FirewallScreen` | Per-app network access control, screen-off rules, schedules. |
+| `dns` | `DnsFilterScreen` | Custom blocklists, whitelists, and threat subscriptions. |
+| `threat_feed` | `ThreatFeedScreen` | Imported IP and Domain threat intelligence indicators. |
+| `wifi_scanner` | `WifiScannerScreen` | Scans nearby networks for security risks and Evil Twins. |
+| `cert_audit` | `CertAuditScreen` | Checks user CA store for known MITM proxies. |
+| `permission_auditor` | `PermissionAuditorScreen` | Scans and risk-scores installed apps based on permissions. |
+| `traffic` | `TrafficScreen` | Real-time `BandwidthMonitor` charts and historical connection logs. |
+| `onboarding` | `OnboardingScreen` | Initial setup, permission requests, and tutorial. |
 
 ---
 
-### 4.4 ExfiltrationDetector
+## 8. VPN Engine
 
-**File**: `vpn/ExfiltrationDetector.kt`
+**Core Class**: `vpn/GateKeeperVpnService.kt`
 
-Correlates two asynchronous data streams to detect real-time data exfiltration:
-1. Sensor access logs from `SensorLogRepository` (microphone, camera activations logged by `PrivacyAccessLogger`).
-2. Large outbound uploads (>500 KB) detected by `TrafficLogger`.
-
-If an app sent a large upload to an external IP within 2 minutes of accessing the microphone or camera, a `CRITICAL` alert *"Potential Data Exfiltration"* is raised. A per-`(packageName, remoteIp)` dedup set prevents alert spam.
-
----
-
-### 4.5 CertificateAuditor
-
-**File**: `vpn/CertificateAuditor.kt`
-
-Enumerates user-installed CA certificates from the `AndroidCAStore` KeyStore (aliases beginning with `user:`). For each certificate it:
-1. Checks the issuer Distinguished Name against a known-risky issuer list (SuperFish, Komodia, Charles Proxy, Fiddler, mitmproxy, BurpSuite, AdGuard, HttpCanary, etc.).
-2. Checks if the certificate has expired.
-3. Assigns a risk level: `HIGH` (known MITM proxy CA), `MEDIUM` (expired or suspicious), `LOW` (unknown user cert).
-
-Returns a list of `RogueCertInfo` records. High-risk certificates generate a `SecurityAlert` and a push notification.
+* **MTU**: `16384` (Increased to support large DNS/EDNS0 responses).
+* **IP Configuration**: Virtual IP `10.120.0.1`, DNS `10.120.0.2`.
+* **Routing Strategy**: Hybrid Firewall. 
+    * If apps are manually blocked: Employs `Strict Firewall Mode`. Only blocked apps are routed to the tunnel (`addAllowedApplication`), their DNS is sinkholed, and TCP/UDP is blocked. Allowed apps bypass the VPN entirely for native speed.
+    * If no apps are manually blocked: Employs `DNS-Only Split Tunnel`. `0.0.0.0/0` is NOT routed; only DNS traffic is routed and intercepted.
+* **PCAP Capture**: Supported via `PcapWriter.kt`. Rotates captures exceeding 50MB and prunes stale files > 24h.
+* **Background Sweeping**: Sweeps idle connections in `ConnectionTracker` and stale sessions in `TcpRelayHandler`/`UdpRelayHandler` every 30s.
 
 ---
 
-### 4.6 PrivacyAccessLogger
+## 9. Packet Filtering
 
-**File**: `vpn/PrivacyAccessLogger.kt`
+**Core Class**: `vpn/PacketFilter.kt`
 
-Uses `AppOpsManager` to detect which apps are currently using sensitive sensors (microphone, camera). Logged to `SensorLog` Room entities including package name, sensor type, start time, duration, and whether the app was in the background at the time.
-
----
-
-### 4.7 PermissionScanner
-
-**File**: `vpn/PermissionScanner.kt`
-
-Enumerates all installed apps from `PackageManager` and scores their declared permissions using a tiered risk taxonomy:
-
-| Tier | Examples | Weight |
-|---|---|---|
-| Critical surveillance | `READ_CONTACTS`, `RECORD_AUDIO`, `CAMERA`, `ACCESS_FINE_LOCATION`, `READ_CALL_LOG`, `READ_SMS` | High |
-| High sensitivity | `PROCESS_OUTGOING_CALLS`, `RECEIVE_SMS`, `READ_MEDIA_*` | Medium-High |
-| Low sensitivity | `VIBRATE`, `SET_ALARM` | Low |
-
-The cumulative risk score (0–100) and tier (CRITICAL / HIGH / MEDIUM / LOW) are returned as `AppPermissionInfo` domain objects.
+* **Protocol Parsing**: IPv4 parsing implemented. IPv6 parsing exists for basic headers.
+* **Verdicts**: `ALLOW`, `DROP`, `DNS_INTERCEPT`, `DNS_SINKHOLE`, `DNS_LEAK`.
+* **DNS-over-HTTPS (DoH)**: Hardcoded IPs (e.g. 8.8.8.8, 1.1.1.1) on port 443 trigger `DNS_LEAK` and are dropped when DoH prevention is enabled.
+* **Context-Aware Rules**: 
+    * Screen-off blocking sets are respected via `updateScreenOffBlockedUids`.
+    * Time-schedule blocks (`packetFilter?.updateScheduledBlockedUids`) support blocking apps during specific minutes of the day.
 
 ---
 
-## 5. Data Layer
+## 10. DNS System
 
-### 5.1 Room Database Schema
+**Core Classes**: `vpn/DnsResolver.kt`, `vpn/DnsBlocklistManager.kt`
 
-**Database name**: `gatekeeper.db`  
-**Current version**: 8  
-**File**: `data/db/AppDatabase.kt`
-
-#### Tables
-
-| Entity | Table | Purpose |
-|---|---|---|
-| `FirewallRule` | `firewall_rules` | Per-app firewall rules (UID, packageName, isBlocked, blockWhenScreenOff) |
-| `DnsEntry` | `dns_entries` | DNS blocklist/allowlist entries (domain, type, source, isActive) |
-| `ConnectionLog` | `connection_logs` | Per-connection traffic records (app, IP, bytes, country, timestamp, isSystemEvent) |
-| `IpRule` | `ip_rules` | Manual IP block/allow rules |
-| `ThreatFeedEntry` | `threat_feed_entries` | Imported threat intelligence indicators (IP or domain) |
-| `KnownNetwork` | `known_networks` | Trusted Wi-Fi networks indexed by SSID+BSSID |
-| `SensorLog` | `sensor_logs` | Sensor access records (mic/camera, package, background flag) |
-| `SecurityAlert` | `security_alerts` | Security events with type, severity, title, description, resolved flag |
-| `BlocklistSubscription` | `blocklist_subscriptions` | User-subscribed external blocklist feeds (URL, name, type, enabled, lastRefreshedAt) |
-
-#### Key DAOs
-
-| DAO | Key Operations |
-|---|---|
-| `FirewallRuleDao` | Insert/update rule, query blocked UIDs as Flow, count blocked apps |
-| `DnsBlocklistDao` | Insert domains, query active black/whitelist as Flow, delete by source |
-| `ConnectionLogDao` | Insert log, query recent logs as Flow, total count |
-| `IpRuleDao` | Insert/delete IP rules, query as Flow |
-| `ThreatFeedDao` | Bulk insert feed entries, query all threat domains, delete by source |
-| `KnownNetworkDao` | Get known BSSIDs for SSID, upsert network record |
-| `SensorLogDao` | Insert log, observe recent entries as Flow |
-| `SecurityAlertDao` | Insert alert, observe unresolved/all alerts as Flow, mark resolved |
-| `BlocklistSubscriptionDao` | CRUD for subscriptions |
+* **Interception**: Queries for blocked domains return `0.0.0.0`. Queries for allowed domains are forwarded to the system resolver using standard UDP sockets.
+* **SafeSearch**: Supported and monitored via DataStore `SAFE_SEARCH_ENABLED`.
+* **Exfiltration Heuristics**: `DnsBlocklistManager.checkDnsExfiltration()` detects base64 patterns, high entropy (Shannon > 3.5), and query rate anomalies (>20/min).
 
 ---
 
-### 5.2 Repositories
+## 11. Traffic Monitoring
 
-All repositories are `@Singleton` injected via Hilt. They act as the single source of truth between the VPN engine, ViewModels, and Room.
+**Core Classes**: `vpn/TrafficLogger.kt`, `vpn/BandwidthMonitor.kt`, `vpn/ConnectionTracker.kt`
 
-| Repository | Responsibility |
-|---|---|
-| `FirewallRepository` | Manage firewall rules; provide blocked UIDs and screen-off UIDs as `Flow` |
-| `DnsRepository` | Manage DNS black/whitelist entries and subscriptions |
-| `TrafficRepository` | Read/write `ConnectionLog`; provide live traffic `Flow` |
-| `ThreatFeedRepository` | Import and query threat feed entries; provide domain set for `DnsBlocklistManager` |
-| `SecurityAlertRepository` | Create and resolve security alerts |
-| `KnownNetworkRepository` | SSID/BSSID trust tracking |
-| `SensorLogRepository` | Store and observe sensor access records |
-| `SettingsRepository` | Persist user preferences via Jetpack DataStore |
+* **UID Mapping**: Uses `ConnectivityManager.getConnectionOwnerUid()` on API 29+.
+* **BandwidthMonitor**: An aggregated memory buffer tracking real-time per-second speeds (bytesIn/bytesOut) specifically for rendering fast, live Vico charts in the UI.
+* **Persistence**: Every 5 seconds, active connections are flushed to `ConnectionLog` Room entities.
+* **GeoIP**: Local MaxMind GeoLite2 database provides offline Country resolution.
 
 ---
 
-### 5.3 DataStore Preferences
+## 12. Security Modules
 
-**Repository**: `SettingsRepository`
-
-Preferences stored via Jetpack DataStore (no XML SharedPreferences):
-
-| Key | Type | Default | Description |
+| Module | Location | Trigger | Status / Action |
 |---|---|---|---|
-| `backend_ip` | String | `""` | IP address of the GateKeeper-Agent server |
-| `vpn_auto_start` | Boolean | `false` | Auto-start VPN on boot |
-| `block_dns_leak` | Boolean | `true` | Drop DNS-over-HTTPS bypass attempts |
-| `screen_off_blocking` | Boolean | `false` | Enable global screen-off mode |
-| `onboarding_done` | Boolean | `false` | Whether the user has completed onboarding |
+| **ThreatFeed** | `ThreatFeedManager.kt` | Background sync | Downloads and parses blocklists. Syncs into memory. Fully Implemented. |
+| **Rogue AP** | `RogueApDetector.kt` | Network availability change | Checks BSSID against Room `KnownNetwork`. Alerts on Evil Twin. Fully Implemented. |
+| **Cellular Monitor** | `CellularMonitor.kt` | Connectivity changes | Checks if network downgraded to 2G (IMSI Catcher). Generates `CRITICAL` alert. Fully Implemented. |
+| **Exfiltration** | `ExfiltrationDetector.kt`| Packet Loop / Outbound | Correlates large uploads with recent microphone/camera access. Fully Implemented. |
+| **Cert Auditor** | `CertificateAuditor.kt` | UI Manual Scan | Scans `AndroidCAStore` for known interceptors (SuperFish, AdGuard, etc.). Fully Implemented. |
+| **Privacy Logger**| `PrivacyAccessLogger.kt`| Background polling | Uses `AppOpsManager` to track mic/camera. Fully Implemented. |
+| **Permission Scan**| `PermissionScanner.kt` | UI Manual Scan | Categorises apps into risk tiers based on Manifest declarations. Fully Implemented. |
 
 ---
 
-## 6. UI Layer — Screens & ViewModels
+## 13. Data Layer
 
-The app uses a single-activity architecture (`MainActivity`) with Jetpack Compose Navigation. Every screen is a `@Composable` function paired with a `@HiltViewModel`.
+### 13.1 Room Database (`gatekeeper.db`)
 
----
+* **Version**: `12` (Migrations registered in `AppModule.kt` cover 2->3 up to 8->9. Remaining schema changes rely on destructive migrations or are unlisted in `addMigrations`).
+* **Entities (9)**: `FirewallRule`, `DnsEntry`, `ConnectionLog`, `IpRule`, `ThreatFeedEntry`, `KnownNetwork`, `SensorLog`, `SecurityAlert`, `BlocklistSubscription`.
+* **DAOs**: 9 matching DAOs provided via Hilt.
 
-### 6.1 Dashboard
+### 13.2 DataStore Preferences (`SettingsRepository.kt`)
 
-**Files**: `ui/screens/dashboard/DashboardScreen.kt`, `DashboardViewModel.kt`
-
-The main landing screen. Shows:
-- **VPN Status Card** with animated shield icon, toggle button to start/stop VPN, and live blocked-packet counter.
-- **Security Summary Tiles**: apps protected, DNS domains blocked, active threats, rogue certificates, unresolved security alerts.
-- **Recent Alerts List**: last N `SecurityAlert` entries with severity color coding and mark-as-resolved actions.
-- **Recent Traffic Preview**: last 3 connection log entries.
-- **Background Sensor Access Counter**: number of mic/camera accesses in the last 24 hours while the app was in the background.
-- **Quick Nav buttons**: navigate to Threat Feed, Wi-Fi Scanner, Permission Auditor, Cert Auditor.
-
-**ViewModel observes**:
-- `SecurityAlertRepository.observeUnresolved()` — unresolved alert list
-- `FirewallRepository.observeBlockedCount()` — blocked app count
-- `DnsRepository.observeBlacklistCount()` — blocked domain count
-- `ThreatFeedRepository.observeCount()` — threat indicator count
-- `TrafficRepository.observeRecent(3)` — recent connections
-- `SensorLogRepository.observeRecent()` — recent sensor access
-- `CertificateAuditor.auditUserCertificates()` — rogue cert count (refreshed on demand)
-- `GateKeeperVpnService.isRunning` / `blockedCount` — static StateFlows
+Currently stores 14 preference keys:
+* `capture_pcap`
+* `backend_ip`
+* `dns_leak_protection`
+* `dns_exfil_detection`
+* `screen_off_blocking_global`
+* `imsi_detection`
+* `firewall_bypass_detect`
+* `background_sensor_alerts`
+* `evil_twin_detection`
+* `global_camera_block`
+* `onboarding_done`
+* `auto_vpn_start`
+* `safe_search_enabled`
+* `theme_mode`
 
 ---
 
-### 6.2 Firewall
+## 14. Background Behavior
 
-**Files**: `ui/screens/firewall/FirewallScreen.kt`, `FirewallViewModel.kt`
-
-Shows a searchable, scrollable list of all installed apps. For each app:
-- App icon, name, and package name.
-- Toggle to block/allow network access.
-- Toggle for "block when screen off" mode (requires app to be blocked first).
-- Risk badge showing the count of sensitive permissions.
-
-**ViewModel**:
-- Loads installed apps via `GetInstalledAppsUseCase` (merges `PackageManager` list with Room firewall rules).
-- Calls `FirewallRepository.setBlocked(uid, packageName, isBlocked)` on toggle.
-- Calls `FirewallRepository.setScreenOffBlocking(uid, isBlocked)` for screen-off mode.
-- Emits the blocked UIDs set to the VPN service which calls `PacketFilter.updateBlockedUids()`.
+* **BootReceiver**: Checks `SettingsRepository.autoVpnStart` and starts VPN service on boot.
+* **GateKeeperDeviceAdminReceiver**: Manages hardware-level lockouts (camera disabling, etc.). Requires user to manually enable Device Admin.
+* **Notification Channels**: Uses `vpn_service` (ongoing), `security_alerts` (general), and `gk_security_alerts` (high priority / vibration).
+* **WorkManager**: `work-runtime-ktx` is included as a dependency, but background syncs are generally managed via Coroutines in the active VPN Service or UI ViewModels, not explicit Workers.
 
 ---
 
-### 6.3 DNS Filter
+## 15. Testing
 
-**Files**: `ui/screens/dns/DnsFilterScreen.kt`, `DnsFilterViewModel.kt`
+**Currently, there are no automated unit or instrumented tests implemented in the repository.**
 
-Provides:
-- **Blocklist tab**: list of blocked domains, add/remove individual domains, search filter.
-- **Allowlist tab**: list of whitelisted domains.
-- **Subscriptions tab**: built-in curated blocklist feeds (`BuiltInBlocklists.feeds`) and user-added feeds; subscribe/unsubscribe with one tap triggers `DnsBlocklistManager.importFromUrl()`.
+The `app/src/test` and `app/src/androidTest` directories do not exist or are empty. Verification of all features relies on manual runtime testing. 
 
-The screen shows live blocked-domain count and last-refresh timestamps per subscription.
-
----
-
-### 6.4 Traffic Monitor
-
-**Files**: `ui/screens/traffic/TrafficScreen.kt`, `TrafficViewModel.kt`
-
-Displays:
-- **Live bandwidth chart** using Vico Charts showing per-second bytes in/out.
-- **Connection log list** with per-entry details: app name, remote IP, remote hostname (reverse-DNS or from DNS intercept), country flag + code, protocol, bytes transferred.
-- **Filter controls**: filter by app name, protocol, or country.
-- **Export button**: triggers `ExportUtils` to export logs as CSV.
-
----
-
-### 6.6 Threat Feed
-
-**Files**: `ui/screens/threats/ThreatFeedScreen.kt`, `ThreatFeedViewModel.kt`
-
-Shows all imported threat intelligence entries. Each entry has:
-- Indicator value (IP or domain).
-- Indicator type and threat type.
-- Feed source name and URL.
-- Import timestamp.
-
-Supports importing new feeds by URL and clearing all feeds. Feeds update the `DnsBlocklistManager` in-memory set on completion.
-
----
-
-### 6.7 Wi-Fi Scanner
-
-**Files**: `ui/screens/wifiscanner/WifiScannerScreen.kt`, `WifiScannerViewModel.kt`
-
-Uses `ScanWifiNetworksUseCase` which calls `android.net.wifi.WifiManager.startScan()` and maps `ScanResult` objects to `WifiNetworkInfo` domain models, computing:
-- Signal level (0–4 bars via `WifiManager.calculateSignalLevel`).
-- Security type (OPEN, WEP, WPA2, WPA3).
-- Security score (0–100).
-- Risk level ("safe", "warning", "danger").
-- Vendor OUI lookup.
-- Evil Twin flag (via `RogueApDetector` logic).
-
-Displays scan results as cards with color-coded risk levels and a "Trust Network" action.
-
----
-
-### 6.8 Permission Auditor
-
-**Files**: `ui/screens/permissionauditor/PermissionAuditorScreen.kt`, `PermissionAuditorViewModel.kt`, `PrivacyDashboardChart.kt`
-
-Runs `ScanAppPermissionsUseCase` to produce `AppPermissionInfo` objects for all installed apps. UI shows:
-- Pie/bar chart (via Vico) of apps per risk tier.
-- Sortable list by risk score.
-- Per-app detail: list of dangerous permissions, risk score badge.
-
----
-
-### 6.9 Certificate Auditor
-
-**Files**: `ui/screens/certaudit/CertAuditScreen.kt`, `CertAuditViewModel.kt`
-
-Invokes `CertificateAuditor.auditUserCertificates()` and displays a list of `RogueCertInfo` objects. Each card shows:
-- Certificate alias, issuer, and subject DN.
-- Expiry date.
-- Risk level badge (`HIGH` in red, `MEDIUM` in orange, `LOW` in yellow).
-
-A scan button re-runs the audit on demand.
-
----
-
-### 6.10 Settings
-
-**Files**: `ui/screens/settings/SettingsScreen.kt`, `SettingsLandingScreen.kt`, `SettingsSubPages.kt`, `SettingsViewModel.kt`
-
-The settings area is split into a landing screen (list of setting categories) and sub-page composables:
-
-| Category | Settings |
-|---|---|
-| VPN & Network | Auto-start on boot, DNS leak blocking |
-| Blocklists | Subscription management (also accessible from DNS screen) |
-| Privacy | Screen-off blocking mode |
-| About | App version, open source licenses |
-
-All changes are persisted via `SettingsRepository` (DataStore) and propagated to the VPN service on next start or via service actions.
-
----
-
-### 6.11 Onboarding
-
-**Files**: `ui/screens/onboarding/OnboardingScreen.kt`, `OnboardingViewModel.kt`
-
-Multi-page intro shown on first launch. Steps through:
-1. Welcome and app overview.
-2. VPN permission explanation and request.
-3. Notification permission request.
-4. Quick-start guide.
-
-On completion, sets `onboarding_done = true` in DataStore and navigates to Dashboard.
-
----
-
-## 7. Navigation
-
-**Files**: `ui/navigation/Screen.kt`, `ui/navigation/AppNavigation.kt`
-
-Sealed class `Screen` defines all navigation routes:
-
-| Route | Class | Bottom Nav? |
-|---|---|---|
-| `dashboard` | `Screen.Dashboard` | ✅ |
-| `firewall` | `Screen.Firewall` | ✅ |
-| `dns` | `Screen.DnsFilter` | ✅ |
-| `traffic` | `Screen.Traffic` | ✅ |
-| `settings` | `Screen.Settings` | ✅ (in nav rail) |
-| `threat_feed` | `Screen.ThreatFeed` | ❌ |
-| `permission_auditor` | `Screen.PermissionAuditor` | ❌ |
-| `wifi_scanner` | `Screen.WifiScanner` | ❌ |
-| `cert_audit` | `Screen.CertAudit` | ❌ |
-
-`AppNavigation.kt` sets up the `NavHost` and renders the `NavigationBar` (bottom bar) for the 5 primary destinations.
-
----
-
-## 8. Dependency Injection (Hilt)
-
-**Module file**: `di/AppModule.kt`  
-**Scope**: `SingletonComponent` — all provided objects are application-scoped singletons.
-
-### Provided Bindings
-
-| Binding | Type | Notes |
-|---|---|---|
-| `AppDatabase` | Room Database | Built with 6 migrations (v2→8) |
-| All 9 DAOs | DAO interfaces | Derived from `AppDatabase` |
-| `OkHttpClient` | HTTP client | Intercepts requests to rewrite base URL from DataStore `backend_ip` |
-| `Retrofit` | REST client | Default base `http://10.0.2.2:8888/`; overridden per-request by OkHttp interceptor |
-
----
-
-## 9. Background Components
-
-### 9.1 Boot Receiver
-
-**File**: `receiver/BootReceiver.kt`  
-**Intent**: `android.intent.action.BOOT_COMPLETED`
-
-Checks `SettingsRepository.vpnAutoStart`. If enabled, starts `GateKeeperVpnService` with `ACTION_START`.
-
-### 9.2 Device Admin Receiver
-
-**File**: `receiver/GateKeeperDeviceAdminReceiver.kt`  
-**Policy resource**: `res/xml/device_admin.xml`
-
-Receives `DEVICE_ADMIN_ENABLED` / `DEVICE_ADMIN_DISABLED` broadcasts. Device admin capabilities are used for future hardware-level blocking features (e.g., disabling Wi-Fi or cellular radios programmatically).
-
-### 9.3 Notification Manager
-
-**File**: `notifications/GKNotificationManager.kt`
-
-Centralised helper for posting notifications. Uses three channels:
-
-| Channel ID | Importance | Purpose |
-|---|---|---|
-| `vpn_service` | LOW | Persistent foreground-service notification while VPN is running |
-| `security_alerts` | HIGH | Alerts for blocked connections and security events |
-| `gk_security_alerts` | HIGH + vibration | Critical-priority alerts (Evil Twin, IMSI catcher, exfiltration) |
-
-Key methods:
-- `postVpnNotification()` — persistent notification required by Android foreground service rules.
-- `sendSecurityAlert(title, message, route)` — posts a high-priority alert with a deep-link `PendingIntent` to navigate to the relevant screen on tap.
-
----
-
-## 10. Built-In DNS Blocklists
-
-**File**: `data/model/BuiltInBlocklists.kt`
-
-| ID | Name | Category | Estimated Size | Source |
-|---|---|---|---|---|
-| `stevenblack_unified` | Steven Black Unified | Ads / Malware / Social | ~130k domains | github.com/StevenBlack/hosts |
-| `urlhaus_malware` | abuse.ch URLhaus | Malware | ~14k domains | urlhaus.abuse.ch |
-| `adguard_dns` | AdGuard DNS Filter | Ads / Trackers | ~50k domains | adguardteam.github.io |
-| `easyprivacy` | EasyPrivacy | Trackers | ~30k domains | v.firebog.net |
-| `hagezi_pro` | HaGeZi Pro++ | Multi-purpose | ~200k domains | github.com/hagezi/dns-blocklists |
-
-Users can add custom blocklist URLs from the DNS Filter screen. Custom lists are stored as `BlocklistSubscription` records in Room and can be refreshed on demand.
-
----
-
-## 11. Utilities
-
-### GeoIpResolver (`vpn/GeoIpResolver.kt`)
-
-Uses the bundled **MaxMind GeoLite2-Country** database (`assets/GeoLite2-Country.mmdb`) for offline country lookups by IP address. Returns `CountryResponse` with ISO country code and name. Lookups are performed on the IO thread within `TrafficLogger`.
-
-### GeoIpLookup (`util/GeoIpLookup.kt`)
-
-A convenience wrapper around `GeoIpResolver` used by non-VPN components (e.g. UI screens).
-
-### NetworkUtils (`vpn/NetworkUtils.kt`, `util/NetworkUtils.kt`)
-
-Low-level IP byte manipulation helpers:
-- Convert `ByteArray` ↔ `InetAddress`.
-- Compute UDP/TCP checksums.
-- Craft DNS response packets.
-- Check if an IP is in a CIDR range.
-
-### PcapWriter (`vpn/PcapWriter.kt`)
-
-Writes captured packets to a PCAP file in standard libpcap format (magic number `0xa1b2c3d4`, link type `RAW`). Called from the VPN packet loop when PCAP recording is active (triggered by `ACTION_START_PCAP`).
-
-### ExportUtils (`vpn/ExportUtils.kt`)
-
-Exports `ConnectionLog` records to CSV (comma-separated) or JSON format for external analysis.
-
----
-
-## 12. Permissions Reference
-
-| Permission | Why It Is Needed |
-|---|---|
-| `INTERNET` | Backend API calls and DNS forwarding |
-| `ACCESS_NETWORK_STATE` | Detect active network type (Wi-Fi vs cellular) |
-| `ACCESS_WIFI_STATE` | Read current Wi-Fi SSID/BSSID for Evil Twin detection |
-| `CHANGE_NETWORK_STATE` | Future: switch networks programmatically |
-| `ACCESS_FINE_LOCATION` | Required by Android for Wi-Fi scan results (API 29+) |
-| `ACCESS_COARSE_LOCATION` | Fallback location for Wi-Fi scanning |
-| `FOREGROUND_SERVICE` | Run VPN as a foreground service |
-| `FOREGROUND_SERVICE_SPECIAL_USE` | Required for `android:foregroundServiceType="specialUse"` on API 34+ |
-| `POST_NOTIFICATIONS` | Show VPN and security alert notifications (API 33+) |
-| `QUERY_ALL_PACKAGES` | Enumerate all installed apps for the per-app firewall |
-| `RECEIVE_BOOT_COMPLETED` | Auto-start VPN on device boot |
-| `READ_PHONE_STATE` | Detect cellular network type for IMSI catcher detection |
-| `BIND_VPN_SERVICE` | System permission binding the VPN service |
-| `BIND_DEVICE_ADMIN` | Device administrator binding |
-
----
-
-## 13. Build Configuration
-
-**File**: `app/build.gradle.kts`
-
-| Property | Value |
-|---|---|
-| `applicationId` | `com.gatekeeper.mobile` |
-| `minSdk` | 26 (Android 8.0) |
-| `targetSdk` | 35 (Android 15) |
-| `compileSdk` | 35 |
-| `versionCode` | 1 |
-| `versionName` | `1.0.0` |
-| Kotlin version | 2.1.0 |
-| AGP | 8.x (Ladybug+) |
-| KSP | Used for Room and Hilt annotation processing |
-
-#### Build Types
-
-| Type | Minification | App ID Suffix |
-|---|---|---|
-| `debug` | Disabled | `.debug` |
-| `release` | R8 + resource shrinking | (none) |
-
-#### Key Dependencies
-
-| Group | Library | Version |
-|---|---|---|
-| UI | Jetpack Compose BOM | `2024.12.01` |
-| UI | Material 3 | `1.3.1` |
-| UI | Vico Charts | `2.0.0-beta.2` |
-| UI | Coil | `2.7.0` |
-| DI | Hilt | `2.53.1` |
-| Lifecycle | AndroidX Lifecycle/ViewModel | `2.8.7` |
-| Navigation | Compose Navigation | `2.8.5` |
-| Async | Coroutines | `1.9.0` |
-| Storage | Room | `2.6.1` |
-| Storage | DataStore | `1.1.1` |
-| Network | Retrofit | `2.11.0` |
-| Network | OkHttp | `4.12.0` |
-| Security | MaxMind GeoIP2 | `4.2.0` |
-| Background | WorkManager | Latest |
-| Testing | JUnit 5, MockK, Turbine | — |
-
----
-
-## 14. Database Migrations
-
-| Migration | Changes |
-|---|---|
-| 2 → 3 | Add `known_networks` table |
-| 3 → 4 | Add `sensor_logs` table |
-| 4 → 5 | Add `security_alerts` table |
-| 5 → 6 | Add `blocklist_subscriptions` table |
-| 6 → 7 | Add `blockWhenScreenOff` column to `firewall_rules` |
-| 7 → 8 | Add `isSystemEvent` and `systemEventReason` columns to `connection_logs` |
-
-All migrations are registered in `AppModule.provideDatabase()` via `addMigrations()`.
-
----
-
-## 15. Ecosystem Integration
-
-GateKeeper Mobile is one component of the **GateKeeper Security Suite FYP**:
-
-```
-┌─────────────────────────┐
-│   GateKeeper Mobile     │
-│   (this repository)     │
-│   Android VPN + UI      │
-└─────────────────────────┘
-             │
-             ▼
-┌──────────────────────────┐
-│  GateKeeper Desktop App  │
-│  (React + Electron       │
-│   or Web Frontend)       │
-└──────────────────────────┘
-```
-
-- **On-device features** (firewall, DNS filter, traffic logging, threat detection) operate entirely offline.
-- **Desktop Application**: The rules and activity logs can optionally be synchronized and viewed on the desktop React frontend.
+Commands like `./gradlew test` will execute successfully but run zero tests.
 
 ---
 
 ## 16. Development Setup
 
-### Prerequisites
-
-| Tool | Required Version |
-|---|---|
-| Android Studio | Ladybug (2024.2+) |
-| JDK | 17 (strictly required) |
-| Kotlin | 2.1.0 |
-| Gradle | 8.13.2 (via wrapper) |
-| Android Device | API 26+ (physical device recommended) |
-
-### Build Steps
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/M-Fahim-Feroz/GateKeeper-Mobile.git
-cd GateKeeper-Mobile
-
-# 2. Open in Android Studio and allow Gradle sync
-
-# 3. Enable USB Debugging on a physical Android device
-
-# 4. Run the app
-./gradlew installDebug
-# OR use Android Studio → Run 'app'
-```
-
-> **Note**: The Android Emulator has known limitations with `VpnService` TUN packet routing. Physical devices are strongly recommended for testing the firewall, DNS filter, and traffic monitor.
+1. Clone repository.
+2. Ensure JDK 17 is installed.
+3. Open in Android Studio (Ladybug or later).
+4. Run standard Gradle Sync. Gradle Wrapper (9.4.1) will auto-download.
+5. Deploy to a physical device or emulator running API 26+ (API 29+ recommended for full UID tracking).
 
 ---
 
-## 17. Testing
+## 17. Feature Implementation Matrix
 
-The project is configured with the following test frameworks:
-
-| Framework | Scope | Use |
-|---|---|---|
-| JUnit 5 | Unit tests | ViewModel logic, repository tests |
-| MockK | Unit tests | Mocking dependencies in unit tests |
-| Kotlin Coroutines Test | Unit tests | Testing `Flow` and `suspend` functions |
-| Turbine | Unit tests | Testing `StateFlow`/`SharedFlow` emissions |
-| Espresso | UI tests | Instrumented UI interaction tests |
-| Compose UI Test | UI tests | Compose semantics-based UI testing |
-
-Run unit tests:
-```bash
-./gradlew test
-```
-
-Run instrumented tests (requires connected device):
-```bash
-./gradlew connectedAndroidTest
-```
+| Feature | UI Available | Core Logic | Status | Notes |
+|---|:---:|:---:|---|---|
+| VPN Tunnel & Relay | N/A | ✅ | Fully Implemented | Includes TCP/UDP relays |
+| App Firewall | ✅ | ✅ | Fully Implemented | Includes screen-off and time scheduling |
+| DNS Sinkhole | ✅ | ✅ | Fully Implemented | In-memory sync is live |
+| Traffic Monitor | ✅ | ✅ | Fully Implemented | Uses Vico charts and MaxMind GeoIP |
+| PCAP Capture | ✅ | ✅ | Fully Implemented | Rotates at 50MB |
+| Evil Twin Detect | ✅ | ✅ | Fully Implemented | Triggers on Network Callback |
+| IMSI Catcher Detect| ✅ | ✅ | Fully Implemented | Tracks 2G downgrades |
+| Cert & Perm Auditor| ✅ | ✅ | Fully Implemented | Works offline |
+| SafeSearch | ✅ | ✅ | Fully Implemented | Modifies DNS payloads |
 
 ---
 
-## 18. Security Features Quick-Reference
+## 18. Known Limitations
 
-| Feature ID | Feature Name | Implementation | Alert Type |
-|---|---|---|---|
-| F1 | Per-App Firewall | `PacketFilter.blockedUids` | — |
-| F2 | DNS Sinkhole | `DnsResolver` + `DnsBlocklistManager` | — |
-| F3 | Traffic Monitor | `ConnectionTracker` + `TrafficLogger` | — |
-| F5 | Threat Intelligence | `ThreatFeedManager` | — |
-| F6 | GeoIP Resolution | `GeoIpResolver` (MaxMind offline DB) | — |
-| F7 | Blocklist Subscriptions | `DnsBlocklistManager.importFromUrl()` | — |
-| F8 | Screen-Off Blocking | `PacketFilter.screenOffBlockedUids` | — |
-| F9 | Evil Twin Detection | `RogueApDetector` | `EVIL_TWIN` (CRITICAL) |
-| F10 | Open Network Warning | `RogueApDetector.OPEN_NETWORK` | Alert on connect |
-| F11 | Certificate Auditor | `CertificateAuditor` | `ROGUE_CERT` (HIGH) |
-| F12 | Permission Auditor | `PermissionScanner` | Risk score display |
-| F13 | DNS Exfiltration Detection | `DnsBlocklistManager.checkDnsExfiltration()` | `DNS_EXFILTRATION` (HIGH) |
-| F14 | Hardcoded-IP Bypass Detection | `DnsBlocklistManager.recentDnsResolutions` | Alert in VPN service |
-| F15 | DoH Bypass Blocking | `PacketFilter.dohProviderIps` + `DNS_LEAK` verdict | Dropped silently |
-| F16 | Data Exfiltration Detection | `ExfiltrationDetector` | `EXFILTRATION` (CRITICAL) |
-| F17 | IMSI Catcher Detection | `CellularMonitor` | `IMSI_CATCHER` (CRITICAL) |
-| F18 | PCAP Capture | `PcapWriter` | — |
-| F19 | Log Export | `ExportUtils` | — |
-| F20 | Privacy Access Logger | `PrivacyAccessLogger` | Sensor log entries |
+* **UID Resolution (Emulator)**: On API < 29, `ConnectivityManager.getConnectionOwnerUid()` is unavailable. Traffic logging may map everything to `Unknown App`.
+* **Private DNS / DoH**: If an app uses hardcoded DoH IPs that aren't in the internal drop list, it will successfully bypass the DNS sinkhole.
+* **IPv6 Parsing**: IPv6 packet parsing is functional but less robust than the IPv4 implementation.
+* **Hardware Dependencies**: Wi-Fi Scanning and BSSID Evil Twin detection require `ACCESS_FINE_LOCATION` and active Location Services on the device.
+* **Automated Tests**: Lack of unit tests means regressions must be caught manually during QA.
+* **ADB Permissions**: Features like `PrivacyAccessLogger` require manual ADB commands (`pm grant ... android.permission.WATCH_APPOPS`) to function properly.
 
 ---
 
-<div align="center">
-  <p><i>GateKeeper Mobile — Advanced Network Security Final Year Project</i></p>
-</div>
+## 19. Supervisor Demonstration Notes
+
+* **Safe to demonstrate live**: App Firewall (blocking Chrome/YouTube), DNS Filter (visiting an ad-tester site), Traffic Monitor (watching live bandwidth spike), Permission Auditor.
+* **Requires prepared data**: Evil Twin and IMSI Catcher detection. (Requires modifying the DB or spoofing BSSIDs/network states).
+* **Requires ADB**: Do not forget to run the `WATCH_APPOPS` grant command before demonstrating Exfiltration Detection or the Sensor Logger, otherwise it will fail silently.

@@ -20,6 +20,8 @@
 
 # MaxMind GeoIP
 -keep class com.maxmind.** { *; }
+-dontwarn java.net.http.**
+-dontwarn com.maxmind.geoip2.WebServiceClient
 
 # Coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}

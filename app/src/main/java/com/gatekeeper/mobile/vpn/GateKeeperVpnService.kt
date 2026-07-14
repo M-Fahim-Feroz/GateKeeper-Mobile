@@ -90,6 +90,11 @@ class GateKeeperVpnService : VpnService() {
     private var packetLoopJob: Job? = null
     private var reportingJob: Job? = null
 
+    private var isCurrentlyScreenOff = false
+    private var isScreenOffBlockingEnabled = false
+    private var isDnsExfilDetectionEnabled = false
+    private var isEvilTwinDetectionEnabled = false
+
     // Packet processing components
     private var packetFilter: PacketFilter? = null
     private var dnsResolver: DnsResolver? = null
@@ -107,15 +112,18 @@ class GateKeeperVpnService : VpnService() {
     // Screen State Receiver
     private val screenStateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            when (intent?.action) {
-                Intent.ACTION_SCREEN_OFF -> {
-                    Log.i(TAG, "Screen OFF -> Activating background exfiltration blocker")
-                    packetFilter?.isScreenOff = true
+            if (intent?.action == Intent.ACTION_SCREEN_OFF) {
+                isCurrentlyScreenOff = true
+                packetFilter?.isScreenOff = isScreenOffBlockingEnabled
+                // F4B: Screen-Off blocking feature — stop tracking when screen dies
+                if (isScreenOffBlockingEnabled) {
+                    connectionTracker.clear()
                 }
-                Intent.ACTION_SCREEN_ON -> {
-                    Log.i(TAG, "Screen ON -> Resuming normal network access")
-                    packetFilter?.isScreenOff = false
-                }
+                Log.i(TAG, "Screen OFF -> Activating background exfiltration blocker")
+            } else if (intent?.action == Intent.ACTION_SCREEN_ON) {
+                isCurrentlyScreenOff = false
+                packetFilter?.isScreenOff = false
+                Log.i(TAG, "Screen ON -> Resuming normal network access")
             }
         }
     }
@@ -251,13 +259,15 @@ class GateKeeperVpnService : VpnService() {
                             } else {
                                 "UNKNOWN"
                             }
-                            val result = rogueApDetector.checkConnection(
-                                ssid = wifiInfo.ssid,
-                                bssid = wifiInfo.bssid,
-                                securityType = securityType
-                            )
-                            if (result == RogueApResult.EVIL_TWIN) {
-                                postBlockNotification("Wi-Fi Security", "Evil Twin Detected: ${wifiInfo.ssid}", "🛡️")
+                            if (isEvilTwinDetectionEnabled) {
+                                val result = rogueApDetector.checkConnection(
+                                    ssid = wifiInfo.ssid,
+                                    bssid = wifiInfo.bssid,
+                                    securityType = securityType
+                                )
+                                if (result == RogueApResult.EVIL_TWIN) {
+                                    postBlockNotification("Wi-Fi Security", "Evil Twin Detected: ${wifiInfo.ssid}", "🛡️")
+                                }
                             }
                         }
                     }
@@ -274,6 +284,27 @@ class GateKeeperVpnService : VpnService() {
         registerReceiver(screenStateReceiver, screenFilter)
 
         // F18: Observe PCAP capture state
+        serviceScope.launch {
+            settingsRepository.dnsLeakProtectionFlow.collect { enabled ->
+                packetFilter?.blockDnsLeak = enabled
+            }
+        }
+        serviceScope.launch {
+            settingsRepository.dnsExfilDetectionFlow.collect { enabled ->
+                isDnsExfilDetectionEnabled = enabled
+            }
+        }
+        serviceScope.launch {
+            settingsRepository.screenOffBlockingFlow.collect { enabled ->
+                isScreenOffBlockingEnabled = enabled
+                packetFilter?.isScreenOff = isScreenOffBlockingEnabled && isCurrentlyScreenOff
+            }
+        }
+        serviceScope.launch {
+            settingsRepository.evilTwinDetectionFlow.collect { enabled ->
+                isEvilTwinDetectionEnabled = enabled
+            }
+        }
         serviceScope.launch {
             settingsRepository.capturePcapFlow.collect { enabled ->
                 isPcapRecording = enabled
@@ -580,11 +611,13 @@ class GateKeeperVpnService : VpnService() {
                                 
                                 if (domain != null && conn != null) {
                                     // F13: Check for DNS exfiltration patterns
-                                    dnsBlocklistManager.checkDnsExfiltration(
-                                        domain = domain,
-                                        packageName = packageName,
-                                        appName = conn.appName ?: "Unknown"
-                                    )
+                                    if (isDnsExfilDetectionEnabled) {
+                                        dnsBlocklistManager.checkDnsExfiltration(
+                                            domain = domain,
+                                            packageName = packageName,
+                                            appName = conn.appName ?: "Unknown"
+                                        )
+                                    }
                                     trafficLogger.log(
                                         uid = conn.uid,
                                         packageName = packageName,
@@ -719,11 +752,10 @@ class GateKeeperVpnService : VpnService() {
         notifDedup[key] = now
 
         val emoji = if (type == "DNS") "🌐" else "🛡️"
-        val notification = NotificationCompat.Builder(this, GateKeeperApp.CHANNEL_ALERTS)
+        val builder = NotificationCompat.Builder(this, GateKeeperApp.CHANNEL_ALERTS)
             .setSmallIcon(android.R.drawable.ic_lock_lock)
             .setContentTitle("$emoji GateKeeper — App Blocked")
             .setContentText("$appName is blocked by Firewall")
-            .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setSilent(true)
             .setContentIntent(
@@ -733,10 +765,20 @@ class GateKeeperVpnService : VpnService() {
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
             )
+
+        val notification = builder
+            .setOngoing(false)
+            .setAutoCancel(true)
             .build()
 
-        NotificationManagerCompat.from(this)
-            .notify((appName.hashCode() and 0xFFFF) + 2000, notification)
+        if (androidx.core.content.ContextCompat.checkSelfPermission(
+                this,
+                android.Manifest.permission.POST_NOTIFICATIONS
+            ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
+            NotificationManagerCompat.from(this)
+                .notify((appName.hashCode() and 0xFFFF) + 2000, notification)
+        }
     }
 
     override fun onDestroy() {
