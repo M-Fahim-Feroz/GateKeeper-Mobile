@@ -11,6 +11,7 @@ import com.gatekeeper.mobile.data.repository.SensorLogRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import com.gatekeeper.mobile.data.db.entity.HardwareResourceType
 import com.gatekeeper.mobile.data.db.entity.AccessStatus
@@ -42,7 +43,8 @@ class PrivacyAccessLogger @Inject constructor(
     @Volatile
     var isAlertsEnabled: Boolean = false
 
-    private val scope = CoroutineScope(Dispatchers.IO)
+    @Volatile
+    private var scope: CoroutineScope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
 
     /** Returns true if the user has granted Usage Access (PACKAGE_USAGE_STATS) via Settings. */
     @android.annotation.SuppressLint("NewApi")
@@ -71,6 +73,8 @@ class PrivacyAccessLogger @Inject constructor(
     }
 
     fun start() {
+        // Recreate scope in case this is a restart after a previous stop()
+        scope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             try {
                 @Suppress("NewApi")
@@ -98,9 +102,17 @@ class PrivacyAccessLogger @Inject constructor(
                 Log.e(TAG, "Failed to stop Privacy Access Logger", e)
             }
         }
+        // Cancel background coroutines to prevent leaks
+        scope.cancel()
     }
 
-    fun pollHistoricalAccess() {
+    // Prevents re-polling usage stats every time the user opens the Privacy Dashboard
+    private val hasPolledOnce = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    fun pollHistoricalAccess(force: Boolean = false) {
+        if (hasPolledOnce.get() && !force) return
+        hasPolledOnce.set(true)
+
         scope.launch {
             // ── Stage 1: AppOps reflection (needs GET_APP_OPS_STATS — ADB/root only) ────────────
             val appOpsSucceeded = tryAppOpsPoll()
@@ -187,12 +199,16 @@ class PrivacyAccessLogger @Inject constructor(
                     val durationMs = if (isResume) 5000L else 2000L  // estimate
                     val resourceType = mapSensorStringToResource(sensorType)
                     val logId = sensorLogRepository.logAccessStart(
-                        pkg, appName, sensorType, isBackground,
+                        packageName = pkg,
+                        appName = appName,
+                        sensorType = sensorType,
+                        isBackground = isBackground,
                         resourceType = resourceType,
                         status = AccessStatus.ALLOWED,
                         isAllowed = true,
                         detectionSource = DetectionSource.PERMISSION_POLL,
-                        confidence = ConfidenceLevel.LOW
+                        confidence = ConfidenceLevel.LOW,
+                        startedAt = timestamp
                     )
                     sensorLogRepository.logAccessEnd(logId, durationMs)
                     lastSeenTimestamps[logKey] = timestamp

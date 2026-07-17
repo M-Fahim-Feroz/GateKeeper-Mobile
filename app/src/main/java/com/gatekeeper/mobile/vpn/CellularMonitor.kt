@@ -9,6 +9,7 @@ import com.gatekeeper.mobile.data.repository.SecurityAlertRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,7 +20,8 @@ class CellularMonitor @Inject constructor(
     private val securityAlertRepository: SecurityAlertRepository,
     private val notificationManager: com.gatekeeper.mobile.notifications.GKNotificationManager
 ) {
-    private val scope = CoroutineScope(Dispatchers.IO)
+    @Volatile
+    private var scope: CoroutineScope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
     private var lastNetworkType: String = "UNKNOWN"
     private var alertedForDowngrade = false
     
@@ -32,6 +34,8 @@ class CellularMonitor @Inject constructor(
 
     @Suppress("DEPRECATION")
     fun start() {
+        // Recreate scope in case this is a restart after a previous stop()
+        scope = CoroutineScope(Dispatchers.IO + kotlinx.coroutines.SupervisorJob())
         try {
             val tm = context.getSystemService(TelephonyManager::class.java) ?: return
 
@@ -143,5 +147,7 @@ class CellularMonitor @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Failed to stop cellular monitor", e)
         }
+        // Cancel background coroutines to prevent leaks after stop
+        scope.cancel()
     }
 }

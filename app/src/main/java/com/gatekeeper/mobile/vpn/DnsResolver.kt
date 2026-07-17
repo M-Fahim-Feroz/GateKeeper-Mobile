@@ -262,21 +262,51 @@ class DnsResolver(
         }
     }
 
+    /**
+     * Parses a DNS domain name from the packet buffer.
+     * - Limits each label to 63 bytes (RFC 1035 §2.3.4)
+     * - Limits the total assembled domain to 253 characters
+     * - Detects DNS compression pointers (0xC0xx) and refuses to follow them
+     *   (queries never use compression; responses are never parsed here)
+     * - Returns ("", 0) on any parse failure rather than throwing
+     */
     private fun extractDomain(packet: ByteBuffer): Pair<String, Int> {
-        val parts = mutableListOf<String>()
-        var len = packet.get().toInt() and 0xFF
-        while (len > 0) {
-            val label = ByteArray(len)
-            packet.get(label)
-            parts.add(String(label, Charsets.US_ASCII))
-            len = packet.get().toInt() and 0xFF
+        return try {
+            val parts = mutableListOf<String>()
+            var totalChars = 0
+            var iterations = 0
+            while (packet.hasRemaining()) {
+                val len = packet.get().toInt() and 0xFF
+                if (len == 0) break
+                // Compression pointer — not expected in queries; stop parsing
+                if ((len and 0xC0) == 0xC0) {
+                    if (packet.hasRemaining()) packet.get() // consume second byte
+                    break
+                }
+                // RFC 1035: label must be ≤ 63 bytes
+                if (len > 63 || !packet.hasRemaining() || packet.remaining() < len) {
+                    return Pair("", 0)
+                }
+                // Guard total assembled domain length (RFC: ≤ 253 chars)
+                totalChars += len + 1 // +1 for '.'
+                if (totalChars > 253) return Pair("", 0)
+
+                val label = ByteArray(len)
+                packet.get(label)
+                parts.add(String(label, Charsets.US_ASCII))
+
+                if (++iterations > 128) return Pair("", 0) // loop guard
+            }
+
+            var qtype = 0
+            if (packet.remaining() >= 4) {
+                qtype = packet.short.toInt() and 0xFFFF
+                packet.short // skip QCLASS
+            }
+            Pair(parts.joinToString("."), qtype)
+        } catch (e: Exception) {
+            Pair("", 0)
         }
-        var qtype = 0
-        if (packet.remaining() >= 4) {
-            qtype = packet.short.toInt() and 0xFFFF
-            packet.short // skip QCLASS
-        }
-        return Pair(parts.joinToString("."), qtype)
     }
 
     private fun buildSinkholeResponse(

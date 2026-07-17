@@ -105,6 +105,8 @@ class DnsBlocklistManager @Inject constructor(
     suspend fun awaitInitialLoad() {
         try {
             reloadAll()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // never swallow cancellation
         } catch (e: Exception) {
             Log.e(TAG, "awaitInitialLoad failed", e)
         }
@@ -170,6 +172,8 @@ class DnsBlocklistManager @Inject constructor(
             }
 
             Log.i(TAG, "Reload complete: ${blacklistedDomains.size} blocked, ${whitelistedDomains.size} allowed")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e // always propagate cancellation
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load blocklists from DB", e)
         }
@@ -182,6 +186,9 @@ class DnsBlocklistManager @Inject constructor(
      * consuming all available memory and crashing the app.
      */
     suspend fun importFromUrl(urlString: String, listType: String = "blacklist", sourceName: String = urlString): Int {
+        if (!urlString.startsWith("http://") && !urlString.startsWith("https://")) {
+            throw IOException("Only HTTP/HTTPS URLs are allowed")
+        }
         return withContext(Dispatchers.IO) {
             var connection: HttpURLConnection? = null
             try {

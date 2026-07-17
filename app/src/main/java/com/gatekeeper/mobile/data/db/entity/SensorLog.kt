@@ -16,7 +16,12 @@ enum class DetectionSource {
     APP_OPS, PERMISSION_POLL, SYSTEM_LOG, INFERRED
 }
 
-@Entity(tableName = "sensor_logs")
+@Entity(
+    tableName = "sensor_logs",
+    indices = [
+        androidx.room.Index(value = ["packageName", "sensorType", "startedAt"], unique = true)
+    ]
+)
 data class SensorLog(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,

@@ -53,7 +53,7 @@ interface SensorLogDao {
     """)
     fun observeTodayPerApp(sinceMs: Long): Flow<List<AppSensorUsage>>
 
-    @Insert
+    @Insert(onConflict = androidx.room.OnConflictStrategy.IGNORE)
     suspend fun insert(log: SensorLog): Long
 
     @Query("UPDATE sensor_logs SET durationMs = :duration WHERE id = :id")

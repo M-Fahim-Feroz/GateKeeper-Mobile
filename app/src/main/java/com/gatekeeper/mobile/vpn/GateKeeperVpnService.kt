@@ -402,6 +402,8 @@ class GateKeeperVpnService : VpnService() {
         }
     }
 
+    private val vpnInterfaceMutex = kotlinx.coroutines.sync.Mutex()
+
     private fun rebuildVpnInterface(blockedPackages: List<String>) {
         // ══════════════════════════════════════════════════════════════════════
         // ARCHITECTURE: Hybrid Per-App Firewall
@@ -423,6 +425,7 @@ class GateKeeperVpnService : VpnService() {
         // ══════════════════════════════════════════════════════════════════════
 
         serviceScope.launch {
+            vpnInterfaceMutex.lock()
             try {
                 val blockedUids = blockedPackages.mapNotNull { pkg ->
                     try { packageManager.getPackageUid(pkg, 0) } catch (e: Exception) { null }
@@ -477,6 +480,8 @@ class GateKeeperVpnService : VpnService() {
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to build VPN interface", e)
                 _isConnecting.value = false
+            } finally {
+                vpnInterfaceMutex.unlock()
             }
         }
     }
@@ -720,6 +725,8 @@ class GateKeeperVpnService : VpnService() {
                 stopForeground(true)
             } catch (e2: Exception) {}
         }
+        
+        PcapWriter.closeStream()
         
         try {
             stopSelf()

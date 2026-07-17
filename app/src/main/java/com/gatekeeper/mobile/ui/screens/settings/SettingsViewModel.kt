@@ -34,7 +34,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val isDnsExfilDetectionEnabled: StateFlow<Boolean> = settingsRepository.dnsExfilDetectionFlow
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val isScreenOffBlockingEnabled: StateFlow<Boolean> = settingsRepository.screenOffBlockingFlow
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)

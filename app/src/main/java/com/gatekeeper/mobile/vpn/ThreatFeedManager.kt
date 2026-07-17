@@ -72,6 +72,10 @@ class ThreatFeedManager @Inject constructor(
      * Imports a threat feed list from a URL and parses it as IPs or Domains.
      */
     suspend fun importFromUrl(url: String, name: String, type: String, threatType: String): Result<Int> = withContext(Dispatchers.IO) {
+        if (!url.startsWith("http://") && !url.startsWith("https://")) {
+            return@withContext Result.failure(IllegalArgumentException("Only HTTP/HTTPS URLs are allowed"))
+        }
+
         var connection: HttpURLConnection? = null
         try {
             Log.i(TAG, "Downloading feed from $url")

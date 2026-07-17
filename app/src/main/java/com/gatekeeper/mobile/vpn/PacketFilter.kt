@@ -57,7 +57,9 @@ class PacketFilter {
             if (schedule != null) {
                 val now = java.util.Calendar.getInstance()
                 val currentMins = now.get(java.util.Calendar.HOUR_OF_DAY) * 60 + now.get(java.util.Calendar.MINUTE)
-                val isTimeBlocked = if (schedule.startMins <= schedule.endMins) {
+                val isTimeBlocked = if (schedule.startMins == schedule.endMins) {
+                    true // Block all day if start and end are exactly equal
+                } else if (schedule.startMins < schedule.endMins) {
                     currentMins in schedule.startMins..schedule.endMins
                 } else {
                     currentMins >= schedule.startMins || currentMins <= schedule.endMins

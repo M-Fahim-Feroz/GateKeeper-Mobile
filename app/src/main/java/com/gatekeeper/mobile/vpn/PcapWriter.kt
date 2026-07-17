@@ -31,6 +31,9 @@ class PcapWriter {
         const val PCAP_MAX_FILES       = 3
         const val PCAP_MAX_AGE_MS      = 24L * 60 * 60 * 1000  // 24 h
 
+        private var activeFile: File? = null
+        private var activeStream: java.io.OutputStream? = null
+
         /** Delete any .pcap files older than PCAP_MAX_AGE_MS from internal files dir. */
         fun pruneStaleFiles(context: Context) {
             val dir = context.filesDir
@@ -51,23 +54,27 @@ class PcapWriter {
         /** Create a new .pcap file with the global PCAP header written. */
         suspend fun createNewFile(context: Context): Result<File> = withContext(Dispatchers.IO) {
             try {
+                closeStream()
+
                 val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
                 val filename = "gk_capture_$timeStamp.pcap"
                 val file = File(context.filesDir, filename)
 
-                FileOutputStream(file).use { fos ->
-                    val header = ByteBuffer.allocate(24)
-                    header.order(ByteOrder.LITTLE_ENDIAN)
-                    header.putInt(PCAP_MAGIC_NUMBER.toInt())
-                    header.putShort(PCAP_VERSION_MAJOR)
-                    header.putShort(PCAP_VERSION_MINOR)
-                    header.putInt(0)      // thiszone
-                    header.putInt(0)      // sigfigs
-                    header.putInt(65535)  // snaplen
-                    header.putInt(LINK_TYPE_RAW_IPV4)
-                    fos.write(header.array())
-                    fos.flush()
-                }
+                val fos = FileOutputStream(file)
+                val header = ByteBuffer.allocate(24)
+                header.order(ByteOrder.LITTLE_ENDIAN)
+                header.putInt(PCAP_MAGIC_NUMBER.toInt())
+                header.putShort(PCAP_VERSION_MAJOR)
+                header.putShort(PCAP_VERSION_MINOR)
+                header.putInt(0)      // thiszone
+                header.putInt(0)      // sigfigs
+                header.putInt(65535)  // snaplen
+                header.putInt(LINK_TYPE_RAW_IPV4)
+                fos.write(header.array())
+                fos.flush()
+
+                activeFile = file
+                activeStream = java.io.BufferedOutputStream(fos, 8192)
 
                 pruneOldPcapFiles(context)
                 Result.success(file)
@@ -79,6 +86,16 @@ class PcapWriter {
         // Kept for back-compat with existing VPN call sites
         suspend fun createInitialFile(context: Context): Result<File> = createNewFile(context)
 
+        /** Closes the active stream, if any. */
+        fun closeStream() {
+            try {
+                activeStream?.flush()
+                activeStream?.close()
+            } catch (_: Exception) {}
+            activeStream = null
+            activeFile = null
+        }
+
         /**
          * Appends a raw IPv4 packet to the given PCAP file.
          * Returns the new current file — callers must check for rotation:
@@ -86,20 +103,24 @@ class PcapWriter {
          */
         suspend fun appendPacket(file: File, packetData: ByteArray, length: Int) = withContext(Dispatchers.IO) {
             try {
-                FileOutputStream(file, true).use { fos ->
-                    val header = ByteBuffer.allocate(16)
-                    header.order(ByteOrder.LITTLE_ENDIAN)
-                    val now = System.currentTimeMillis()
-                    val tsSec  = (now / 1000).toInt()
-                    val tsUsec = ((now % 1000) * 1000).toInt()
-                    header.putInt(tsSec)
-                    header.putInt(tsUsec)
-                    header.putInt(length) // incl_len
-                    header.putInt(length) // orig_len
-                    fos.write(header.array())
-                    fos.write(packetData, 0, length)
-                    fos.flush()
+                if (file != activeFile || activeStream == null) {
+                    closeStream()
+                    activeFile = file
+                    activeStream = java.io.BufferedOutputStream(FileOutputStream(file, true), 8192)
                 }
+
+                val header = ByteBuffer.allocate(16)
+                header.order(ByteOrder.LITTLE_ENDIAN)
+                val now = System.currentTimeMillis()
+                val tsSec  = (now / 1000).toInt()
+                val tsUsec = ((now % 1000) * 1000).toInt()
+                header.putInt(tsSec)
+                header.putInt(tsUsec)
+                header.putInt(length) // incl_len
+                header.putInt(length) // orig_len
+
+                activeStream?.write(header.array())
+                activeStream?.write(packetData, 0, length)
             } catch (_: Exception) {
                 // Ignore silent failure to avoid crashing VPN loop
             }

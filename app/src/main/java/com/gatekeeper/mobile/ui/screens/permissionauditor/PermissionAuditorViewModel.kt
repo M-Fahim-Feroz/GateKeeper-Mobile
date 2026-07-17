@@ -77,7 +77,7 @@ class PermissionAuditorViewModel @Inject constructor(
     fun hasUsageStatsPermission(): Boolean = privacyAccessLogger.hasUsageStatsPermission()
 
     fun refreshSensorData() {
-        privacyAccessLogger.pollHistoricalAccess()
+        privacyAccessLogger.pollHistoricalAccess(force = true)
     }
 
     fun scanPermissions() {

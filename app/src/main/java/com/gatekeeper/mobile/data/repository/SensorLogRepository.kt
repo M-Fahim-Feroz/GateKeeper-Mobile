@@ -45,7 +45,8 @@ class SensorLogRepository @Inject constructor(
         status: AccessStatus = AccessStatus.ALLOWED,
         isAllowed: Boolean = true,
         detectionSource: DetectionSource = DetectionSource.INFERRED,
-        confidence: ConfidenceLevel = ConfidenceLevel.LOW
+        confidence: ConfidenceLevel = ConfidenceLevel.LOW,
+        startedAt: Long = System.currentTimeMillis()
     ): Long {
         val log = SensorLog(
             packageName = packageName,
@@ -56,7 +57,8 @@ class SensorLogRepository @Inject constructor(
             isAllowed = isAllowed,
             detectionSource = detectionSource,
             confidence = confidence,
-            isBackground = isBackground
+            isBackground = isBackground,
+            startedAt = startedAt
         )
         return dao.insert(log)
     }
