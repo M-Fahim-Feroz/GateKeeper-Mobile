@@ -2,11 +2,14 @@
 *.iml
 .gradle/
 build/
+app/build/
 local.properties
 .idea/
+.vscode/
 captures/
 .externalNativeBuild/
 .cxx/
+*.log
 
 # Keystore
 *.jks
@@ -27,3 +30,8 @@ previous_dns_changes.txt
 recover.py
 recovered_dns.kt
 recovered.txt
+build_baseline.log
+test_baseline.txt
+tree.txt
+migrations_history.txt
+DOCUMENTATION_OLD.md
